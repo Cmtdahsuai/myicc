@@ -218,6 +218,9 @@ void OnListSelect(int sel) {
     if (sel == LB_ERR) return;
     INT_PTR data = (INT_PTR)SendMessageW(g_hListBox, LB_GETITEMDATA, sel, 0);
 
+    // Close popup first to avoid re-entrancy with timer/activate
+    CloseListPopup();
+
     if (data == -1) {
         g_targetPath[0] = 0;
         wcscpy(g_targetDisplay, L"(全局模式 - 不限制)");
@@ -232,7 +235,6 @@ void OnListSelect(int sel) {
 
     SetWindowText(g_hBtnDrop, g_targetDisplay);
     AutoSaveConfig();
-    CloseListPopup();
 }
 
 void ClearTarget() {
