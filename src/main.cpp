@@ -121,11 +121,16 @@ void UpdateBtnText();
 HICON CreateFriesIcon(int size);
 
 WNDPROC g_oldListDlgProc = nullptr;
+bool g_popupJustOpened = false;
+
 LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_COMMAND)
         return SendMessageW(g_hWnd, WM_COMMAND, wParam, lParam);
-    if (msg == WM_ACTIVATE && LOWORD(wParam) == WA_INACTIVE)
-        CloseListPopup();
+    if (msg == WM_ACTIVATE && LOWORD(wParam) == WA_INACTIVE) {
+        if (!g_popupJustOpened)
+            CloseListPopup();
+        g_popupJustOpened = false;
+    }
 
     if (msg == WM_MEASUREITEM) {
         LPMEASUREITEMSTRUCT mis = (LPMEASUREITEMSTRUCT)lParam;
@@ -280,6 +285,7 @@ void ShowListPopup() {
     }
 
     SendMessageW(g_hListBox, LB_SETCURSEL, selIdx, 0);
+    g_popupJustOpened = true;
     ShowWindow(g_hListDlg, SW_SHOW);
     SetFocus(g_hListBox);
 }
@@ -462,6 +468,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         g_hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 
+        // Bold font for buttons
+        NONCLIENTMETRICSW ncm = { sizeof(ncm) };
+        SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+        ncm.lfMessageFont.lfWeight = FW_BOLD;
+        wcscpy(ncm.lfMessageFont.lfFaceName, L"Microsoft YaHei");
+        HFONT hBoldFont = CreateFontIndirectW(&ncm.lfMessageFont);
+
         const wchar_t* names[] = {
             L"饱和度 (色彩鲜艳程度):",
             L"亮度 (画面明暗):",
@@ -496,10 +509,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // Buttons row
         int yBtnRow = 272;
-        CreateWindow(L"BUTTON", L"恢复默认",
+        HWND btnReset = CreateWindow(L"BUTTON", L"恢复默认",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                      400, yBtnRow, 80, 24,
                      hwnd, (HMENU)ID_BTN_RESET, hi, nullptr);
+        SendMessage(btnReset, WM_SETFONT, (WPARAM)hBoldFont, TRUE);
 
         HWND chkTray = CreateWindow(L"BUTTON", L"关闭时最小化到托盘",
                      WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
@@ -532,10 +546,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                      hwnd, (HMENU)ID_BTN_DROPDOWN, hi, nullptr);
         SendMessage(g_hBtnDrop, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-        CreateWindow(L"BUTTON", L"刷新",
+        HWND btnRefresh = CreateWindow(L"BUTTON", L"刷新",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                      420, yTarget - 3, 45, 26,
                      hwnd, (HMENU)ID_BTN_REFRESH, hi, nullptr);
+        SendMessage(btnRefresh, WM_SETFONT, (WPARAM)hBoldFont, TRUE);
 
 
         LoadConfig();
@@ -563,11 +578,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
 
-    case WM_CTLCOLORSTATIC: {
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLOREDIT: {
         HDC hdc = (HDC)wParam;
         SetBkMode(hdc, TRANSPARENT);
-        return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
-        // Note: window bg is set via wc.hbrBackground (fries cream)
+        SetBkColor(hdc, RGB(240, 228, 205));
+        static HBRUSH hBg = CreateSolidBrush(RGB(240, 228, 205));
+        return (LRESULT)hBg;
     }
 
     case WM_TIMER: {
@@ -782,7 +799,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = CreateSolidBrush(RGB(255, 248, 230));  // fries cream
+    wc.hbrBackground = CreateSolidBrush(RGB(240, 228, 205));  // warm fries cream
     wc.lpszClassName = L"MyICCWindow";
     wc.hIcon   = LoadIconW(hInstance, L"IDI_MYICC");
     wc.hIconSm = LoadIconW(hInstance, L"IDI_MYICC");
