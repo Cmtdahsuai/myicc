@@ -8,10 +8,13 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <psapi.h>
+#include <tlhelp32.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
+#include <algorithm>
 #include <fstream>
 #include "color_controller.h"
 
@@ -33,10 +36,10 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #define ID_EDIT_TMP     1024
 #define ID_EDIT_GAM     1025
 #define ID_BTN_RESET    2002
-#define ID_BTN_PICK     2004
+#define ID_BTN_REFRESH  2006
 #define ID_BTN_CLEAR    2005
+#define ID_COMBO_TARGET 2007
 #define ID_STATUS       3001
-#define ID_TARGET_LBL   3002
 #define ID_TIMER        1
 
 HINSTANCE g_hInst;
@@ -44,14 +47,13 @@ HWND g_hWnd = nullptr;
 HWND g_hSliders[5] = {};
 HWND g_hEdits[5] = {};
 HWND g_hStatus;
-HWND g_hTargetLabel;
+HWND g_hCombo;
 
 ColorParams g_params;
 bool g_dirty = false;
 bool g_updating = false;
 bool g_effectActive = false;
 wchar_t g_targetPath[MAX_PATH] = {};
-wchar_t g_targetNameOnly[MAX_PATH] = {};
 static const wchar_t* CONFIG_PATH = L"myicc_config.txt";
 
 // ---- Config ----
@@ -63,9 +65,7 @@ void AutoSaveConfig() {
     fprintf(f, "contrast %d\n",    g_params.contrast);
     fprintf(f, "temperature %d\n", g_params.temperature);
     fprintf(f, "gamma %d\n",       g_params.gamma);
-    if (g_targetPath[0]) {
-        fprintf(f, "target_path %ls\n", g_targetPath);
-    }
+    if (g_targetPath[0]) fprintf(f, "target_path %ls\n", g_targetPath);
     fclose(f);
 }
 
@@ -89,12 +89,89 @@ void LoadConfig() {
         }
     }
     fclose(f);
+}
 
-    // Extract filename for display
-    if (g_targetPath[0]) {
-        wchar_t* lastSlash = wcsrchr(g_targetPath, L'\\');
-        wcscpy(g_targetNameOnly, lastSlash ? lastSlash + 1 : g_targetPath);
+// ---- Process enumeration ----
+struct ProcInfo {
+    std::wstring name;
+    std::wstring path;
+    SIZE_T memKB;
+};
+std::vector<ProcInfo> g_procList;
+
+void FreeComboData() {
+    for (int i = 0; i < (int)SendMessage(g_hCombo, CB_GETCOUNT, 0, 0); i++) {
+        void* data = (void*)SendMessage(g_hCombo, CB_GETITEMDATA, i, 0);
+        if (data) free(data);
     }
+}
+
+void RefreshProcessList() {
+    SendMessage(g_hCombo, CB_RESETCONTENT, 0, 0);
+    FreeComboData();
+    g_procList.clear();
+
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return;
+
+    PROCESSENTRY32W pe = { sizeof(pe) };
+    if (Process32FirstW(snap, &pe)) {
+        do {
+            if (pe.th32ProcessID == 0) continue;
+
+            HANDLE hProc = OpenProcess(
+                PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
+            if (!hProc) continue;
+
+            wchar_t path[MAX_PATH] = {};
+            DWORD len = MAX_PATH;
+            bool gotPath = QueryFullProcessImageNameW(hProc, 0, path, &len) != 0;
+
+            PROCESS_MEMORY_COUNTERS pmc = {};
+            SIZE_T memKB = 0;
+            if (GetProcessMemoryInfo(hProc, &pmc, sizeof(pmc))) {
+                memKB = pmc.WorkingSetSize / 1024;
+            }
+            CloseHandle(hProc);
+
+            if (!gotPath || !path[0]) continue;
+
+            ProcInfo pi;
+            pi.name = pe.szExeFile;
+            pi.path = path;
+            pi.memKB = memKB;
+            g_procList.push_back(pi);
+        } while (Process32NextW(snap, &pe));
+    }
+    CloseHandle(snap);
+
+    // Sort by memory, high to low
+    std::sort(g_procList.begin(), g_procList.end(),
+        [](const ProcInfo& a, const ProcInfo& b) { return a.memKB > b.memKB; });
+
+    // Populate combo
+    int selIdx = -1;
+    for (size_t i = 0; i < g_procList.size(); i++) {
+        wchar_t display[512];
+        if (g_procList[i].memKB >= 1024) {
+            swprintf(display, 512, L"%s  (%d.%d MB)",
+                g_procList[i].name.c_str(),
+                (int)(g_procList[i].memKB / 1024),
+                (int)((g_procList[i].memKB % 1024) * 10 / 1024));
+        } else {
+            swprintf(display, 512, L"%s  (%d KB)",
+                g_procList[i].name.c_str(), (int)g_procList[i].memKB);
+        }
+
+        int idx = (int)SendMessage(g_hCombo, CB_ADDSTRING, 0, (LPARAM)display);
+        SendMessage(g_hCombo, CB_SETITEMDATA, idx, (LPARAM)i);
+
+        if (_wcsicmp(g_procList[i].path.c_str(), g_targetPath) == 0)
+            selIdx = idx;
+    }
+
+    if (selIdx >= 0)
+        SendMessage(g_hCombo, CB_SETCURSEL, selIdx, 0);
 }
 
 // ---- Foreground detection ----
@@ -119,7 +196,7 @@ bool IsTargetForeground() {
     return _wcsicmp(path, g_targetPath) == 0;
 }
 
-// ---- Apply / Reset effects ----
+// ---- Apply / Reset ----
 void ApplyToGPU() {
     if (!ColorController::Instance().IsReady()) return;
     ColorController::Instance().ApplySettings(g_params);
@@ -137,19 +214,17 @@ void ResetEffects() {
     ColorParams neutral;
     ColorController::Instance().ApplySettings(neutral);
     g_effectActive = false;
-    SetWindowText(g_hStatus, L"滤镜已取消 (当前不在目标程序中)");
+    SetWindowText(g_hStatus, L"已取消 (当前不在目标程序中)");
 }
 
 void ResetToDefault() {
     g_params = ColorParams();
-
     g_updating = true;
     for (int i = 0; i < 5; i++) {
         SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, 50);
         SetWindowText(g_hEdits[i], L"50");
     }
     g_updating = false;
-
     AutoSaveConfig();
     ApplyToGPU();
 }
@@ -158,7 +233,6 @@ int ClampValue(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
 
 void OnEditChanged(int idx) {
     if (g_updating) return;
-
     wchar_t buf[16];
     GetWindowText(g_hEdits[idx], buf, 16);
     int val = _wtoi(buf);
@@ -179,7 +253,6 @@ void OnEditChanged(int idx) {
         case 3: g_params.temperature = val; break;
         case 4: g_params.gamma       = val; break;
     }
-
     AutoSaveConfig();
     if (g_effectActive) ApplyToGPU();
 }
@@ -193,37 +266,24 @@ void SyncEditToSlider(int idx, int value) {
     g_updating = false;
 }
 
-void UpdateTargetDisplay() {
-    if (g_targetPath[0]) {
-        wchar_t display[512];
-        swprintf(display, 512, L"当前目标: %s", g_targetNameOnly);
-        SetWindowText(g_hTargetLabel, display);
-    } else {
-        SetWindowText(g_hTargetLabel, L"尚未选择目标程序 (全局生效)");
+void OnComboSelect() {
+    int sel = (int)SendMessage(g_hCombo, CB_GETCURSEL, 0, 0);
+    if (sel == CB_ERR) {
+        // User might have selected the "no selection" empty item
+        return;
     }
-}
 
-void PickTargetApp() {
-    OPENFILENAMEW ofn = {};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = g_hWnd;
-    ofn.lpstrFilter = L"可执行文件 (*.exe)\0*.exe\0所有文件 (*.*)\0*.*\0";
-    ofn.lpstrFile = g_targetPath;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+    size_t procIdx = (size_t)SendMessage(g_hCombo, CB_GETITEMDATA, sel, 0);
+    if (procIdx >= g_procList.size()) return;
 
-    if (GetOpenFileNameW(&ofn)) {
-        wchar_t* lastSlash = wcsrchr(g_targetPath, L'\\');
-        wcscpy(g_targetNameOnly, lastSlash ? lastSlash + 1 : g_targetPath);
-        UpdateTargetDisplay();
-        AutoSaveConfig();
-    }
+    wcscpy(g_targetPath, g_procList[procIdx].path.c_str());
+    AutoSaveConfig();
+    SetWindowText(g_hStatus, L"目标程序已设定, 等待该程序切换至前台...");
 }
 
 void ClearTarget() {
     g_targetPath[0] = 0;
-    g_targetNameOnly[0] = 0;
-    UpdateTargetDisplay();
+    SendMessage(g_hCombo, CB_SETCURSEL, (WPARAM)-1, 0);
     AutoSaveConfig();
     ApplyToGPU();
 }
@@ -257,40 +317,40 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                          hwnd, (HMENU)(UINT_PTR)editIds[i], hi, nullptr);
         }
 
-        // Target app section
-        CreateWindow(L"STATIC", L"滤镜生效条件: 当指定程序处于前台时自动应用",
-                     WS_CHILD | WS_VISIBLE | SS_LEFT,
-                     10, 290, 420, 16,
+        // Target app dropdown
+        CreateWindow(L"STATIC", L"目标程序:",
+                     WS_CHILD | WS_VISIBLE,
+                     10, 290, 65, 20,
                      hwnd, nullptr, hi, nullptr);
 
-        g_hTargetLabel = CreateWindow(L"STATIC", L"尚未选择目标程序 (全局生效)",
-                     WS_CHILD | WS_VISIBLE | SS_LEFT | SS_SUNKEN,
-                     10, 308, 310, 22,
-                     hwnd, (HMENU)ID_TARGET_LBL, hi, nullptr);
+        g_hCombo = CreateWindow(L"COMBOBOX", nullptr,
+                     WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
+                     80, 288, 300, 200,
+                     hwnd, (HMENU)ID_COMBO_TARGET, hi, nullptr);
 
-        CreateWindow(L"BUTTON", L"选择程序...",
+        CreateWindow(L"BUTTON", L"刷新",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     325, 306, 90, 24,
-                     hwnd, (HMENU)ID_BTN_PICK, hi, nullptr);
+                     385, 287, 50, 24,
+                     hwnd, (HMENU)ID_BTN_REFRESH, hi, nullptr);
 
         CreateWindow(L"BUTTON", L"清除",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     420, 306, 45, 24,
+                     440, 287, 40, 24,
                      hwnd, (HMENU)ID_BTN_CLEAR, hi, nullptr);
 
         // Reset button
         CreateWindow(L"BUTTON", L"恢复默认",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     325, 340, 90, 28,
+                     385, 325, 80, 28,
                      hwnd, (HMENU)ID_BTN_RESET, hi, nullptr);
 
         // Status bar
-        g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整, 选择程序后仅对该程序生效",
+        g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整, 在下拉栏中选择目标程序",
                      WS_CHILD | WS_VISIBLE | SS_LEFT | WS_BORDER,
-                     10, 380, 460, 22,
+                     10, 365, 460, 22,
                      hwnd, (HMENU)ID_STATUS, hi, nullptr);
 
-        // Load saved config
+        // Load config and init
         LoadConfig();
         g_updating = true;
         for (int i = 0; i < 5; i++) {
@@ -302,9 +362,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SetWindowText(g_hEdits[i], buf);
         }
         g_updating = false;
-        UpdateTargetDisplay();
 
-        // Start timer for foreground detection
+        RefreshProcessList();
         SetTimer(hwnd, ID_TIMER, 500, nullptr);
         ApplyToGPU();
 
@@ -355,12 +414,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
 
+        if (notify == CBN_SELCHANGE && ctrlId == ID_COMBO_TARGET) {
+            OnComboSelect();
+            break;
+        }
+
         switch (ctrlId) {
             case ID_BTN_RESET:
                 ResetToDefault();
                 break;
-            case ID_BTN_PICK:
-                PickTargetApp();
+            case ID_BTN_REFRESH:
+                RefreshProcessList();
+                SetWindowText(g_hStatus, L"进程列表已刷新");
                 break;
             case ID_BTN_CLEAR:
                 ClearTarget();
@@ -371,6 +436,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     case WM_CLOSE:
         KillTimer(hwnd, ID_TIMER);
+        FreeComboData();
         ColorController::Instance().Shutdown();
         DestroyWindow(hwnd);
         break;
@@ -408,7 +474,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     wc.hIcon         = LoadIcon(nullptr, IDI_APPLICATION);
     RegisterClassEx(&wc);
 
-    RECT r = { 0, 0, 490, 440 };
+    RECT r = { 0, 0, 500, 420 };
     AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE);
 
     g_hWnd = CreateWindowEx(0, L"MyICCWindow", L"显示器色彩调节 - myICC",
