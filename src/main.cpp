@@ -44,6 +44,7 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #define ID_STATUS       3001
 #define ID_TIMER        1
 #define ID_CHK_TRAY     3003
+#define ID_CHK_AUTORUN  3004
 #define ID_TRAY_SHOW    4001
 #define ID_TRAY_EXIT    4002
 #define WM_TRAYICON     (WM_APP + 1)
@@ -429,6 +430,32 @@ void RestoreFromTray(HWND hwnd) {
     SetForegroundWindow(hwnd);
 }
 
+// ---- Auto-start with Windows ----
+bool IsAutoRunEnabled() {
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+        return false;
+    wchar_t val[512] = {};
+    DWORD len = sizeof(val);
+    LSTATUS ret = RegQueryValueExW(hKey, L"myICC", nullptr, nullptr, (BYTE*)val, &len);
+    RegCloseKey(hKey);
+    return ret == ERROR_SUCCESS;
+}
+
+void SetAutoRun(bool enable) {
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
+        return;
+    if (enable) {
+        wchar_t path[MAX_PATH];
+        GetModuleFileNameW(nullptr, path, MAX_PATH);
+        RegSetValueExW(hKey, L"myICC", 0, REG_SZ, (BYTE*)path, (DWORD)(wcslen(path) + 1) * sizeof(wchar_t));
+    } else {
+        RegDeleteValueW(hKey, L"myICC");
+    }
+    RegCloseKey(hKey);
+}
+
 // ---- Window Procedure ----
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -500,6 +527,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                      hwnd, (HMENU)ID_CHK_TRAY, hi, nullptr);
         SendMessage(chkTray, WM_SETFONT, (WPARAM)g_hFont, TRUE);
         if (g_closeToTray) SendMessage(chkTray, BM_SETCHECK, BST_CHECKED, 0);
+
+        HWND chkAuto = CreateWindow(L"BUTTON", L"开机自启动",
+                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                     160, yBtn + 24, 100, 22,
+                     hwnd, (HMENU)ID_CHK_AUTORUN, hi, nullptr);
+        SendMessage(chkAuto, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+        if (IsAutoRunEnabled()) SendMessage(chkAuto, BM_SETCHECK, BST_CHECKED, 0);
 
         g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整色彩, 点击目标程序选择",
                      WS_CHILD | WS_VISIBLE | SS_LEFT | WS_BORDER,
@@ -604,6 +638,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case ID_CHK_TRAY:
                 g_closeToTray = (SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
                 AutoSaveConfig();
+                break;
+            case ID_CHK_AUTORUN:
+                SetAutoRun(SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
                 break;
             case ID_TRAY_SHOW:
                 RestoreFromTray(hwnd);
