@@ -489,10 +489,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                      hwnd, (HMENU)ID_BTN_REFRESH, hi, nullptr);
 
         int yBtn = yBase + 34;
-        CreateWindow(L"BUTTON", L"清除",
-                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     10, yBtn, 52, 24,
-                     hwnd, (HMENU)ID_BTN_CLEAR, hi, nullptr);
         CreateWindow(L"BUTTON", L"恢复默认",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                      68, yBtn, 80, 24,
@@ -604,9 +600,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 CloseListPopup();
                 RefreshProcessList();
                 SetWindowText(g_hStatus, L"进程列表已刷新 (请重新点击目标程序按钮)");
-                break;
-            case ID_BTN_CLEAR:
-                ClearTarget();
                 break;
             case ID_CHK_TRAY:
                 g_closeToTray = (SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
