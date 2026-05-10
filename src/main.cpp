@@ -131,11 +131,6 @@ LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         CloseListPopup();
         return 0;
     }
-    // Close when clicking outside
-    if (msg == WM_KILLFOCUS) {
-        CloseListPopup();
-        return 0;
-    }
 
     if (msg == WM_MEASUREITEM) {
         LPMEASUREITEMSTRUCT mis = (LPMEASUREITEMSTRUCT)lParam;
@@ -606,6 +601,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         static HBRUSH hBg = CreateSolidBrush(RGB(240, 228, 205));
         return (LRESULT)hBg;
     }
+
+    case WM_ACTIVATEAPP:
+        if (wParam && g_hListDlg)
+            CloseListPopup();  // user clicked back on main window
+        break;
 
     case WM_TIMER: {
         static bool wasForeground = true;
