@@ -535,14 +535,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
     }
 
-    case WM_SIZE: {
-        if (wParam == SIZE_MINIMIZED) {
-            MinimizeToTray(hwnd);
-            return 0;
-        }
-        break;
-    }
-
     case WM_TIMER: {
         static bool wasForeground = true;
         bool hasNoTarget = !g_targetPath[0];
