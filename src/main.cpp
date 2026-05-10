@@ -43,6 +43,10 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #define ID_LISTBOX      2008
 #define ID_STATUS       3001
 #define ID_TIMER        1
+#define ID_CHK_TRAY     3003
+#define ID_TRAY_SHOW    4001
+#define ID_TRAY_EXIT    4002
+#define WM_TRAYICON     (WM_APP + 1)
 
 HINSTANCE g_hInst;
 HWND g_hWnd = nullptr;
@@ -60,6 +64,8 @@ bool g_updating = false;
 bool g_effectActive = false;
 wchar_t g_targetPath[MAX_PATH] = {};
 wchar_t g_targetDisplay[256] = L"(全局模式 - 不限制)";
+bool g_closeToTray = true;
+NOTIFYICONDATAW g_nid = {};
 static const wchar_t* CONFIG_PATH = L"myicc_config.txt";
 
 // ---- Config ----
@@ -72,6 +78,7 @@ void AutoSaveConfig() {
     fprintf(f, "temperature %d\n", g_params.temperature);
     fprintf(f, "gamma %d\n",       g_params.gamma);
     if (g_targetPath[0]) fprintf(f, "target_path %ls\n", g_targetPath);
+    fprintf(f, "close_to_tray %d\n", g_closeToTray ? 1 : 0);
     fclose(f);
 }
 
@@ -88,6 +95,7 @@ void LoadConfig() {
             if (!wcscmp(key, L"contrast"))    g_params.contrast    = val;
             if (!wcscmp(key, L"temperature")) g_params.temperature = val;
             if (!wcscmp(key, L"gamma"))       g_params.gamma       = val;
+            if (!wcscmp(key, L"close_to_tray")) g_closeToTray = (val != 0);
         }
         wchar_t pathStr[MAX_PATH];
         if (swscanf(line, L"target_path %[^\r\n]", pathStr) == 1) {
@@ -393,6 +401,34 @@ void SyncEditToSlider(int idx, int value) {
     g_updating = false;
 }
 
+// ---- System Tray ----
+void AddTrayIcon(HWND hwnd) {
+    g_nid.cbSize = sizeof(NOTIFYICONDATAW);
+    g_nid.hWnd = hwnd;
+    g_nid.uID = 1;
+    g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    g_nid.uCallbackMessage = WM_TRAYICON;
+    g_nid.hIcon = CreateFriesIcon(16);
+    wcscpy(g_nid.szTip, L"显示器色彩调节 - myICC");
+    Shell_NotifyIconW(NIM_ADD, &g_nid);
+}
+
+void RemoveTrayIcon() {
+    if (g_nid.hWnd)
+        Shell_NotifyIconW(NIM_DELETE, &g_nid);
+}
+
+void MinimizeToTray(HWND hwnd) {
+    ShowWindow(hwnd, SW_HIDE);
+    AddTrayIcon(hwnd);
+}
+
+void RestoreFromTray(HWND hwnd) {
+    RemoveTrayIcon();
+    ShowWindow(hwnd, SW_SHOW);
+    SetForegroundWindow(hwnd);
+}
+
 // ---- Window Procedure ----
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -454,6 +490,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                      68, 296, 80, 24,
                      hwnd, (HMENU)ID_BTN_RESET, hi, nullptr);
 
+        HWND chkTray = CreateWindow(L"BUTTON", L"关闭时最小化到托盘",
+                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                     160, 297, 155, 22,
+                     hwnd, (HMENU)ID_CHK_TRAY, hi, nullptr);
+        SendMessage(chkTray, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+        if (g_closeToTray) SendMessage(chkTray, BM_SETCHECK, BST_CHECKED, 0);
+
         g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整色彩, 点击目标程序选择",
                      WS_CHILD | WS_VISIBLE | SS_LEFT | WS_BORDER,
                      10, 335, 460, 22,
@@ -490,6 +533,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         HDC hdc = (HDC)wParam;
         SetBkMode(hdc, TRANSPARENT);
         return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
+    }
+
+    case WM_SIZE: {
+        if (wParam == SIZE_MINIMIZED) {
+            MinimizeToTray(hwnd);
+            return 0;
+        }
+        break;
     }
 
     case WM_TIMER: {
@@ -557,21 +608,56 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case ID_BTN_CLEAR:
                 ClearTarget();
                 break;
+            case ID_CHK_TRAY:
+                g_closeToTray = (SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
+                AutoSaveConfig();
+                break;
+            case ID_TRAY_SHOW:
+                RestoreFromTray(hwnd);
+                break;
+            case ID_TRAY_EXIT:
+                RemoveTrayIcon();
+                KillTimer(hwnd, ID_TIMER);
+                CloseListPopup();
+                ColorController::Instance().Shutdown();
+                DestroyWindow(hwnd);
+                break;
         }
         break;
     }
 
     case WM_CLOSE:
+        if (g_closeToTray) {
+            MinimizeToTray(hwnd);
+            return 0;
+        }
         KillTimer(hwnd, ID_TIMER);
         CloseListPopup();
+        RemoveTrayIcon();
         ColorController::Instance().Shutdown();
-        // g_hFont is a stock object, no need to delete
         DestroyWindow(hwnd);
         break;
 
     case WM_DESTROY:
+        RemoveTrayIcon();
         PostQuitMessage(0);
         break;
+
+    case WM_TRAYICON: {
+        if (LOWORD(lParam) == WM_LBUTTONUP) {
+            RestoreFromTray(hwnd);
+        } else if (LOWORD(lParam) == WM_RBUTTONUP) {
+            HMENU menu = CreatePopupMenu();
+            AppendMenuW(menu, MF_STRING, ID_TRAY_SHOW, L"显示窗口");
+            AppendMenuW(menu, MF_STRING, ID_TRAY_EXIT, L"退出");
+            POINT pt;
+            GetCursorPos(&pt);
+            SetForegroundWindow(hwnd);
+            TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, nullptr);
+            DestroyMenu(menu);
+        }
+        break;
+    }
 
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
