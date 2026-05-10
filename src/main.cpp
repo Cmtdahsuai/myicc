@@ -400,7 +400,7 @@ void AddTrayIcon(HWND hwnd) {
     g_nid.uID = 1;
     g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     g_nid.uCallbackMessage = WM_TRAYICON;
-    g_nid.hIcon = CreateFriesIcon(16);
+    g_nid.hIcon = LoadIconW(g_hInst, L"IDI_MYICC");
     wcscpy(g_nid.szTip, L"显示器色彩调节 - myICC");
     Shell_NotifyIconW(NIM_ADD, &g_nid);
 }
@@ -543,11 +543,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         SetTimer(hwnd, ID_TIMER, 500, nullptr);
 
-        // Explicitly set window icons
-        HICON bigIcon = CreateFriesIcon(32);
-        HICON smallIcon = CreateFriesIcon(16);
-        SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)bigIcon);
-        SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)smallIcon);
+        // Explicitly set window icons from resource
+        HICON resIcon = LoadIconW(hi, L"IDI_MYICC");
+        SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)resIcon);
+        SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)resIcon);
 
         ApplyToGPU();
         return 0;
@@ -773,9 +772,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = L"MyICCWindow";
-    HICON hIcon = CreateFriesIcon(32);
-    wc.hIcon         = hIcon;
-    wc.hIconSm       = CreateFriesIcon(16);
+    wc.hIcon   = LoadIconW(hInstance, L"IDI_MYICC");
+    wc.hIconSm = LoadIconW(hInstance, L"IDI_MYICC");
     RegisterClassEx(&wc);
 
     RECT r = { 0, 0, 500, 360 };

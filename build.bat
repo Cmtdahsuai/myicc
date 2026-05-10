@@ -10,6 +10,7 @@ set "SRC_FILES=src\main.cpp src\nvapi_wrapper.cpp src\color_controller.cpp src\g
 set "INC_FLAGS=-Ithirdparty\nvapi -Isrc"
 set "LIBS=-luser32 -lgdi32 -lcomctl32 -lpsapi -lshell32"
 set "OUT_EXE=myicc.exe"
+set "RES_FILE=src\myicc.o"
 
 :: ---- Try MinGW-w64 (w64devkit or MSYS2) ----
 set MINGW_PATH=
@@ -28,12 +29,16 @@ where g++.exe >nul 2>&1 && set MINGW_PATH=g++
 :found_mingw
 if not "%MINGW_PATH%"=="" (
     echo [INFO] Building with MinGW-w64: %MINGW_PATH%
-    "%MINGW_PATH%" -std=c++20 -O0 -static -mwindows -municode %INC_FLAGS% %SRC_FILES% %LIBS% -o %OUT_EXE%
+    for %%d in ("%MINGW_PATH%") do set "MINGW_DIR=%%~dpd"
+    "%MINGW_DIR%windres.exe" src\myicc.rc -O coff %RES_FILE%
+    if !ERRORLEVEL! neq 0 ( echo [WARN] windres failed && goto :skip_mingw )
+    "%MINGW_PATH%" -std=c++20 -O0 -static -mwindows -municode %INC_FLAGS% %SRC_FILES% %RES_FILE% %LIBS% -o %OUT_EXE%
     if !ERRORLEVEL! equ 0 (
         echo [OK] Build successful: %OUT_EXE%
         exit /b 0
     )
     echo [WARN] MinGW build failed
+    :skip_mingw
 )
 
 :: ---- Try Zig ----
