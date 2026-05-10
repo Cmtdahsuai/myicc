@@ -129,7 +129,7 @@ void RefreshProcessList() {
             if (pe.th32ProcessID == 0) continue;
 
             HANDLE hProc = OpenProcess(
-                PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
             if (!hProc) continue;
 
             wchar_t path[MAX_PATH] = {};
@@ -191,7 +191,8 @@ void ShowListPopup() {
     SendMessageW(g_hListBox, LB_SETITEMDATA, globalIdx, (LPARAM)-1);
 
     int selIdx = globalIdx;
-    for (size_t i = 0; i < g_procList.size(); i++) {
+    size_t showCount = g_procList.size() < 20 ? g_procList.size() : 20;
+    for (size_t i = 0; i < showCount; i++) {
         wchar_t display[512];
         double mem = (double)g_procList[i].memKB;
         if (mem >= 1048576.0)
