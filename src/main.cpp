@@ -229,11 +229,16 @@ void RefreshProcessList() {
         [](const ProcInfo& a, const ProcInfo& b) { return a.memKB > b.memKB; });
 }
 
+bool g_procListLoaded = false;
+
 void ShowListPopup() {
     if (g_hListDlg) { CloseListPopup(); return; }
 
-    // Refresh list each time we open
-    RefreshProcessList();
+    // Only refresh on first open; use "刷新" button for updates
+    if (!g_procListLoaded) {
+        RefreshProcessList();
+        g_procListLoaded = true;
+    }
 
     RECT btnRect;
     GetWindowRect(g_hBtnDrop, &btnRect);
@@ -647,6 +652,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case ID_BTN_REFRESH:
                 CloseListPopup();
                 RefreshProcessList();
+                g_procListLoaded = true;
                 break;
             case ID_CHK_TRAY:
                 g_closeToTray = (SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
