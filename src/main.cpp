@@ -571,6 +571,100 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
+// ---- Icon: cartoon french fries ----
+HICON CreateFriesIcon(int size) {
+    HBITMAP hbmColor = nullptr, hbmMask = nullptr;
+    HDC hdc = GetDC(nullptr);
+    HDC hdcMem = CreateCompatibleDC(hdc);
+    HDC hdcMask = CreateCompatibleDC(hdc);
+
+    // Color bitmap
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = size;
+    bmi.bmiHeader.biHeight = size;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    hbmColor = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    hbmMask = CreateBitmap(size, size, 1, 1, nullptr);
+    ReleaseDC(nullptr, hdc);
+
+    HBITMAP oldColor = (HBITMAP)SelectObject(hdcMem, hbmColor);
+    HBITMAP oldMask = (HBITMAP)SelectObject(hdcMask, hbmMask);
+
+    // Draw on color bitmap
+    RECT rc = {0, 0, size, size};
+    HBRUSH bg = CreateSolidBrush(RGB(255, 255, 255));
+    FillRect(hdcMem, &rc, bg);
+    DeleteObject(bg);
+
+    int w = size;
+    float s = w / 32.0f;
+    // Fries box (red)
+    int bx = (int)(5 * s), by = (int)(16 * s), bw = (int)(22 * s), bh = (int)(16 * s);
+    RECT box = {bx, by, bx + bw, by + bh};
+    HBRUSH redBrush = CreateSolidBrush(RGB(220, 50, 30));
+    FillRect(hdcMem, &box, redBrush);
+    DeleteObject(redBrush);
+
+    // Box rim
+    HPEN rimPen = CreatePen(PS_SOLID, (int)(2*s > 0 ? 2*s : 1), RGB(180, 30, 10));
+    HPEN oldPen = (HPEN)SelectObject(hdcMem, rimPen);
+    MoveToEx(hdcMem, bx, by, nullptr);
+    LineTo(hdcMem, bx + bw, by);
+    SelectObject(hdcMem, oldPen);
+    DeleteObject(rimPen);
+
+    // Fries (golden rectangles)
+    int fries[][4] = {
+        {(int)(8*s),  (int)(10*s), (int)(5*s),  (int)(14*s)},
+        {(int)(14*s), (int)(7*s),  (int)(5*s),  (int)(15*s)},
+        {(int)(20*s), (int)(9*s),  (int)(5*s),  (int)(14*s)},
+        {(int)(11*s), (int)(4*s),  (int)(5*s),  (int)(15*s)},
+        {(int)(17*s), (int)(5*s),  (int)(5*s),  (int)(14*s)},
+    };
+    HBRUSH goldBrush = CreateSolidBrush(RGB(255, 200, 50));
+    HBRUSH gold2Brush = CreateSolidBrush(RGB(240, 180, 40));
+    for (int i = 0; i < 5; i++) {
+        int fx = (int)(fries[i][0] * 1);
+        int fy = (int)(fries[i][1] * 1);
+        int fw = (int)(fries[i][2] * 1);
+        int fh = (int)(fries[i][3] * 1);
+        RECT fr = {fx, fy, fx + fw, fy + fh};
+        FillRect(hdcMem, &fr, (i % 2) ? goldBrush : gold2Brush);
+        // Brown crisp edge
+        HPEN edge = CreatePen(PS_SOLID, 1, RGB(200, 140, 20));
+        HPEN old = (HPEN)SelectObject(hdcMem, edge);
+        MoveToEx(hdcMem, fx, fy + fh, nullptr);
+        LineTo(hdcMem, fx, fy);
+        LineTo(hdcMem, fx + fw, fy);
+        SelectObject(hdcMem, old);
+        DeleteObject(edge);
+    }
+    DeleteObject(goldBrush);
+    DeleteObject(gold2Brush);
+
+    // Mask (white on black)
+    RECT mrc = {0, 0, size, size};
+    FillRect(hdcMask, &mrc, (HBRUSH)GetStockObject(WHITE_BRUSH));
+
+    SelectObject(hdcMem, oldColor);
+    SelectObject(hdcMask, oldMask);
+    DeleteDC(hdcMem);
+    DeleteDC(hdcMask);
+
+    ICONINFO ii = {};
+    ii.fIcon = TRUE;
+    ii.hbmColor = hbmColor;
+    ii.hbmMask = hbmMask;
+    HICON hIcon = CreateIconIndirect(&ii);
+    DeleteObject(hbmColor);
+    DeleteObject(hbmMask);
+    return hIcon;
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     g_hInst = hInstance;
 
@@ -591,7 +685,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = L"MyICCWindow";
-    wc.hIcon         = LoadIcon(nullptr, IDI_APPLICATION);
+    HICON hIcon = CreateFriesIcon(32);
+    wc.hIcon         = hIcon;
+    wc.hIconSm       = CreateFriesIcon(16);
     RegisterClassEx(&wc);
 
     RECT r = { 0, 0, 500, 400 };
