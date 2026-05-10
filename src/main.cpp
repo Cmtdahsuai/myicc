@@ -137,9 +137,12 @@ LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             hIcon = g_procList[(size_t)data].hIcon;
 
         bool sel = (dis->itemState & ODS_SELECTED) != 0;
+        COLORREF bgClr = GetSysColor(sel ? COLOR_HIGHLIGHT : COLOR_WINDOW);
         HBRUSH bg = GetSysColorBrush(sel ? COLOR_HIGHLIGHT : COLOR_WINDOW);
-        SetTextColor(dis->hDC, GetSysColor(sel ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
         FillRect(dis->hDC, &dis->rcItem, bg);
+        SetBkColor(dis->hDC, bgClr);
+        SetBkMode(dis->hDC, TRANSPARENT);
+        SetTextColor(dis->hDC, GetSysColor(sel ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
 
         if (hIcon)
             DrawIconEx(dis->hDC, dis->rcItem.left + 3, dis->rcItem.top + 3, hIcon, 16, 16, 0, nullptr, DI_NORMAL);
