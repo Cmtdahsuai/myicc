@@ -4,7 +4,6 @@
 // Parameters (mirrors 薯条ICC TOML config ranges)
 struct ColorParams {
     int saturation  = 50;    // 0-100  (digital vibrance)
-    int grayscale   = 0;     // 0-100  (0=full color, 100=full B&W)
     int brightness  = 50;    // 0-100  (50 = neutral)
     int contrast    = 50;    // 0-100  (50 = neutral)
     int temperature = 50;    // 0-100  (50 = 6500K neutral)

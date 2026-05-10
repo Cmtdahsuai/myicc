@@ -11,8 +11,7 @@ public:
     bool IsReady() const { return m_ready; }
 
     // saturation: 0.0 = grayscale, 1.0 = normal, 2.0 = double vibrance
-    // grayscale: 0.0 = full color, 1.0 = full B&W
-    void SetSaturation(float saturation, float grayscale = 0.0f);
+    void SetSaturation(float saturation);
 
     // Reset to identity (no effect)
     void Reset();

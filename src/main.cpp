@@ -31,13 +31,11 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #define ID_CONTRAST     1003
 #define ID_TEMPERATURE  1004
 #define ID_GAMMA        1005
-#define ID_GRAYSCALE    1006
 #define ID_EDIT_SAT     1021
 #define ID_EDIT_BRI     1022
 #define ID_EDIT_CON     1023
 #define ID_EDIT_TMP     1024
 #define ID_EDIT_GAM     1025
-#define ID_EDIT_GRY     1026
 #define ID_BTN_RESET    2002
 #define ID_BTN_REFRESH  2006
 #define ID_BTN_CLEAR    2005
@@ -52,8 +50,8 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 HINSTANCE g_hInst;
 HWND g_hWnd = nullptr;
-HWND g_hSliders[6] = {};
-HWND g_hEdits[6] = {};
+HWND g_hSliders[5] = {};
+HWND g_hEdits[5] = {};
 HWND g_hStatus;
 HWND g_hBtnDrop;
 HWND g_hListBox;
@@ -75,7 +73,6 @@ void AutoSaveConfig() {
     FILE* f = _wfopen(CONFIG_PATH, L"w");
     if (!f) return;
     fprintf(f, "saturation %d\n",  g_params.saturation);
-    fprintf(f, "grayscale %d\n",   g_params.grayscale);
     fprintf(f, "brightness %d\n",  g_params.brightness);
     fprintf(f, "contrast %d\n",    g_params.contrast);
     fprintf(f, "temperature %d\n", g_params.temperature);
@@ -94,7 +91,6 @@ void LoadConfig() {
         int val = 0;
         if (swscanf(line, L"%63s %d", key, &val) == 2) {
             if (!wcscmp(key, L"saturation"))  g_params.saturation  = val;
-            if (!wcscmp(key, L"grayscale"))   g_params.grayscale   = val;
             if (!wcscmp(key, L"brightness"))  g_params.brightness  = val;
             if (!wcscmp(key, L"contrast"))    g_params.contrast    = val;
             if (!wcscmp(key, L"temperature")) g_params.temperature = val;
@@ -361,12 +357,9 @@ void ResetEffects() {
 void ResetToDefault() {
     g_params = ColorParams();
     g_updating = true;
-    for (int i = 0; i < 6; i++) {
-        int defVal = (i == 1) ? 0 : 50;  // grayscale default = 0
-        SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, defVal);
-        wchar_t buf[16];
-        swprintf(buf, 16, L"%d", defVal);
-        SetWindowText(g_hEdits[i], buf);
+    for (int i = 0; i < 5; i++) {
+        SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, 50);
+        SetWindowText(g_hEdits[i], L"50");
     }
     g_updating = false;
     AutoSaveConfig();
@@ -390,11 +383,10 @@ void OnEditChanged(int idx) {
     g_updating = false;
     switch (idx) {
         case 0: g_params.saturation  = val; break;
-        case 1: g_params.grayscale   = val; break;
-        case 2: g_params.brightness  = val; break;
-        case 3: g_params.contrast    = val; break;
-        case 4: g_params.temperature = val; break;
-        case 5: g_params.gamma       = val; break;
+        case 1: g_params.brightness  = val; break;
+        case 2: g_params.contrast    = val; break;
+        case 3: g_params.temperature = val; break;
+        case 4: g_params.gamma       = val; break;
     }
     AutoSaveConfig();
     if (g_effectActive || !g_targetPath[0]) ApplyToGPU();
@@ -445,33 +437,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         g_hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 
-        const wchar_t* names[] = { L"饱和度:", L"灰度:", L"亮度:", L"对比度:", L"色温:", L"伽马:" };
-        int sliderIds[] = { ID_SATURATION, ID_GRAYSCALE, ID_BRIGHTNESS, ID_CONTRAST, ID_TEMPERATURE, ID_GAMMA };
-        int editIds[]   = { ID_EDIT_SAT, ID_EDIT_GRY, ID_EDIT_BRI, ID_EDIT_CON, ID_EDIT_TMP, ID_EDIT_GAM };
+        const wchar_t* names[] = { L"饱和度:", L"亮度:", L"对比度:", L"色温:", L"伽马:" };
+        int sliderIds[] = { ID_SATURATION, ID_BRIGHTNESS, ID_CONTRAST, ID_TEMPERATURE, ID_GAMMA };
+        int editIds[]   = { ID_EDIT_SAT, ID_EDIT_BRI, ID_EDIT_CON, ID_EDIT_TMP, ID_EDIT_GAM };
 
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 5; i++) {
             HWND lbl = CreateWindow(L"STATIC", names[i],
                          WS_CHILD | WS_VISIBLE,
-                         10, 10 + i * 42, 60, 20,
+                         10, 12 + i * 50, 60, 20,
                          hwnd, nullptr, hi, nullptr);
             SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
             g_hSliders[i] = CreateWindow(TRACKBAR_CLASS, nullptr,
                          WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS,
-                         75, 28 + i * 42, 310, 26,
+                         75, 30 + i * 50, 310, 28,
                          hwnd, (HMENU)(UINT_PTR)sliderIds[i], hi, nullptr);
             SendMessage(g_hSliders[i], TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
-            SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, (i == 1) ? 0 : 50);  // grayscale defaults to 0
+            SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, 50);
 
-            g_hEdits[i] = CreateWindow(L"EDIT", (i == 1) ? L"0" : L"50",
+            g_hEdits[i] = CreateWindow(L"EDIT", L"50",
                          WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER | ES_CENTER,
-                         395, 28 + i * 42, 45, 22,
+                         395, 30 + i * 50, 45, 22,
                          hwnd, (HMENU)(UINT_PTR)editIds[i], hi, nullptr);
             SendMessage(g_hEdits[i], WM_SETFONT, (WPARAM)g_hFont, TRUE);
         }
 
-        // Target app section (y shifted for 6 sliders)
-        int yBase = 10 + 6 * 42;
+        // Target app section
+        int yBase = 265;
         HWND lbl = CreateWindow(L"STATIC", L"目标程序:",
                      WS_CHILD | WS_VISIBLE,
                      10, yBase, 70, 20,
@@ -517,9 +509,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         SetWindowText(g_hBtnDrop, g_targetDisplay);
 
         g_updating = true;
-        int vals[] = { g_params.saturation, g_params.grayscale, g_params.brightness,
-                      g_params.contrast, g_params.temperature, g_params.gamma };
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 5; i++) {
+            int vals[] = { g_params.saturation, g_params.brightness,
+                          g_params.contrast, g_params.temperature, g_params.gamma };
             SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, vals[i]);
             wchar_t buf[16];
             swprintf(buf, 16, L"%d", vals[i]);
@@ -564,11 +556,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         int pos = (int)SendMessage((HWND)lParam, TBM_GETPOS, 0, 0);
         switch (id) {
             case ID_SATURATION:  g_params.saturation  = pos; SyncEditToSlider(0, pos); break;
-            case ID_GRAYSCALE:   g_params.grayscale   = pos; SyncEditToSlider(1, pos); break;
-            case ID_BRIGHTNESS:  g_params.brightness  = pos; SyncEditToSlider(2, pos); break;
-            case ID_CONTRAST:    g_params.contrast    = pos; SyncEditToSlider(3, pos); break;
-            case ID_TEMPERATURE: g_params.temperature = pos; SyncEditToSlider(4, pos); break;
-            case ID_GAMMA:       g_params.gamma       = pos; SyncEditToSlider(5, pos); break;
+            case ID_BRIGHTNESS:  g_params.brightness  = pos; SyncEditToSlider(1, pos); break;
+            case ID_CONTRAST:    g_params.contrast    = pos; SyncEditToSlider(2, pos); break;
+            case ID_TEMPERATURE: g_params.temperature = pos; SyncEditToSlider(3, pos); break;
+            case ID_GAMMA:       g_params.gamma       = pos; SyncEditToSlider(4, pos); break;
         }
         AutoSaveConfig();
         if (g_effectActive || !g_targetPath[0]) ApplyToGPU();
@@ -582,11 +573,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (notify == EN_KILLFOCUS) {
             switch (ctrlId) {
                 case ID_EDIT_SAT: OnEditChanged(0); break;
-                case ID_EDIT_GRY: OnEditChanged(1); break;
-                case ID_EDIT_BRI: OnEditChanged(2); break;
-                case ID_EDIT_CON: OnEditChanged(3); break;
-                case ID_EDIT_TMP: OnEditChanged(4); break;
-                case ID_EDIT_GAM: OnEditChanged(5); break;
+                case ID_EDIT_BRI: OnEditChanged(1); break;
+                case ID_EDIT_CON: OnEditChanged(2); break;
+                case ID_EDIT_TMP: OnEditChanged(3); break;
+                case ID_EDIT_GAM: OnEditChanged(4); break;
             }
             break;
         }
