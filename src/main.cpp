@@ -602,11 +602,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return (LRESULT)hBg;
     }
 
-    case WM_ACTIVATEAPP:
-        if (wParam && g_hListDlg)
-            CloseListPopup();  // user clicked back on main window
-        break;
-
     case WM_TIMER: {
         static bool wasForeground = true;
         bool hasNoTarget = !g_targetPath[0];
