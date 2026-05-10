@@ -8,7 +8,7 @@ echo.
 
 set "SRC_FILES=src\main.cpp src\nvapi_wrapper.cpp src\color_controller.cpp src\gamma.cpp src\color_enhance.cpp"
 set "INC_FLAGS=-Ithirdparty\nvapi -Isrc"
-set "LIBS=-luser32 -lgdi32 -lcomctl32 -lpsapi"
+set "LIBS=-luser32 -lgdi32 -lcomctl32 -lpsapi -lshell32"
 set "OUT_EXE=myicc.exe"
 
 :: ---- Try MinGW-w64 (w64devkit or MSYS2) ----
@@ -57,7 +57,7 @@ if not "%ZIG_PATH%"=="" (
 where cl >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo [INFO] Building with MSVC...
-    cl /EHsc /O2 /std:c++20 /Fe:%OUT_EXE% /I thirdparty\nvapi /I src %SRC_FILES% /link user32.lib gdi32.lib comctl32.lib psapi.lib
+    cl /EHsc /O2 /std:c++20 /Fe:%OUT_EXE% /I thirdparty\nvapi /I src %SRC_FILES% /link user32.lib gdi32.lib comctl32.lib psapi.lib shell32.lib
     if !ERRORLEVEL! equ 0 (
         echo [OK] Build successful: %OUT_EXE%
         exit /b 0

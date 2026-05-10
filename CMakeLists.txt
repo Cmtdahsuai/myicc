@@ -19,6 +19,7 @@ target_link_libraries(myicc
     gdi32
     comctl32
     psapi
+    shell32
 )
 
 # Statically link CRT for portability

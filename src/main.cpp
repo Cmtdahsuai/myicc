@@ -9,6 +9,7 @@
 #include <commctrl.h>
 #include <psapi.h>
 #include <tlhelp32.h>
+#include <shellapi.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -103,6 +104,7 @@ struct ProcInfo {
     std::wstring name;
     std::wstring path;
     SIZE_T memKB;
+    HICON hIcon;
 };
 std::vector<ProcInfo> g_procList;
 
@@ -115,6 +117,42 @@ LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         return SendMessageW(g_hWnd, WM_COMMAND, wParam, lParam);
     if (msg == WM_ACTIVATE && LOWORD(wParam) == WA_INACTIVE)
         CloseListPopup();
+
+    if (msg == WM_MEASUREITEM) {
+        LPMEASUREITEMSTRUCT mis = (LPMEASUREITEMSTRUCT)lParam;
+        mis->itemHeight = 22;
+        return TRUE;
+    }
+
+    if (msg == WM_DRAWITEM) {
+        LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
+        if (dis->itemID == (UINT)-1) return TRUE;
+
+        wchar_t text[512];
+        SendMessageW(dis->hwndItem, LB_GETTEXT, dis->itemID, (LPARAM)text);
+
+        HICON hIcon = nullptr;
+        INT_PTR data = (INT_PTR)SendMessageW(dis->hwndItem, LB_GETITEMDATA, dis->itemID, 0);
+        if (data != -1 && data < (INT_PTR)g_procList.size())
+            hIcon = g_procList[(size_t)data].hIcon;
+
+        bool sel = (dis->itemState & ODS_SELECTED) != 0;
+        HBRUSH bg = GetSysColorBrush(sel ? COLOR_HIGHLIGHT : COLOR_WINDOW);
+        SetTextColor(dis->hDC, GetSysColor(sel ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
+        FillRect(dis->hDC, &dis->rcItem, bg);
+
+        if (hIcon)
+            DrawIconEx(dis->hDC, dis->rcItem.left + 3, dis->rcItem.top + 3, hIcon, 16, 16, 0, nullptr, DI_NORMAL);
+
+        RECT tr = dis->rcItem;
+        tr.left += 24;
+        DrawTextW(dis->hDC, text, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        if (dis->itemState & ODS_FOCUS)
+            DrawFocusRect(dis->hDC, &dis->rcItem);
+        return TRUE;
+    }
+
     return CallWindowProcW(g_oldListDlgProc, hwnd, msg, wParam, lParam);
 }
 
@@ -123,11 +161,14 @@ void CloseListPopup() {
         DestroyWindow(g_hListDlg);
         g_hListDlg = nullptr;
         g_hListBox = nullptr;
+        // Note: icons are cleaned in RefreshProcessList / WM_DESTROY
     }
 }
 
 void RefreshProcessList() {
     CloseListPopup();
+    // Clean up old icons
+    for (auto& p : g_procList) { if (p.hIcon) DestroyIcon(p.hIcon); }
     g_procList.clear();
 
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -158,6 +199,10 @@ void RefreshProcessList() {
             pi.name = pe.szExeFile;
             pi.path = path;
             pi.memKB = memKB;
+            SHFILEINFOW sfi = {};
+            pi.hIcon = nullptr;
+            if (SHGetFileInfoW(path, 0, &sfi, sizeof(sfi), SHGFI_ICON | SHGFI_SMALLICON))
+                pi.hIcon = sfi.hIcon;
             g_procList.push_back(pi);
         } while (Process32NextW(snap, &pe));
     }
@@ -194,7 +239,7 @@ void ShowListPopup() {
     SendMessageW(g_hListDlg, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
     g_hListBox = CreateWindowExW(0, L"LISTBOX", nullptr,
-        WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_HASSTRINGS,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_HASSTRINGS | LBS_OWNERDRAWFIXED,
         0, 0, 440, listH,
         g_hListDlg, (HMENU)ID_LISTBOX, g_hInst, nullptr);
     SendMessageW(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
