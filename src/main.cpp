@@ -41,7 +41,6 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #define ID_BTN_CLEAR    2005
 #define ID_BTN_DROPDOWN 2007
 #define ID_LISTBOX      2008
-#define ID_STATUS       3001
 #define ID_TIMER        1
 #define ID_CHK_TRAY     3003
 #define ID_CHK_AUTORUN  3004
@@ -53,7 +52,6 @@ HINSTANCE g_hInst;
 HWND g_hWnd = nullptr;
 HWND g_hSliders[5] = {};
 HWND g_hEdits[5] = {};
-HWND g_hStatus;
 HWND g_hBtnDrop;
 HWND g_hListBox;
 HWND g_hListDlg;  // popup window hosting the listbox
@@ -301,7 +299,6 @@ void OnListSelect(int sel) {
         if (procIdx >= g_procList.size()) return;
         wcscpy(g_targetPath, g_procList[procIdx].path.c_str());
         wcscpy(g_targetDisplay, g_procList[procIdx].name.c_str());
-        SetWindowText(g_hStatus, L"已设定目标程序, 等待该程序进入前台...");
     }
 
     SetWindowText(g_hBtnDrop, g_targetDisplay);
@@ -341,18 +338,12 @@ void ApplyToGPU() {
     ColorController::Instance().ApplySettings(g_params);
     g_effectActive = true;
     g_dirty = false;
-    wchar_t status[128];
-    swprintf(status, 128, L"已应用: 饱和度=%d  亮度=%d  对比度=%d  色温=%d  伽马=%d",
-             g_params.saturation, g_params.brightness, g_params.contrast,
-             g_params.temperature, g_params.gamma);
-    SetWindowText(g_hStatus, status);
 }
 
 void ResetEffects() {
     ColorParams neutral;
     ColorController::Instance().ApplySettings(neutral);
     g_effectActive = false;
-    SetWindowText(g_hStatus, L"已取消 (当前不在目标程序中)");
 }
 
 void ResetToDefault() {
@@ -535,11 +526,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         SendMessage(chkAuto, WM_SETFONT, (WPARAM)g_hFont, TRUE);
         if (IsAutoRunEnabled()) SendMessage(chkAuto, BM_SETCHECK, BST_CHECKED, 0);
 
-        g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整色彩, 点击目标程序选择",
-                     WS_CHILD | WS_VISIBLE | SS_LEFT | WS_BORDER,
-                     10, yBtn + 38, 460, 22,
-                     hwnd, (HMENU)ID_STATUS, hi, nullptr);
-        SendMessage(g_hStatus, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
         LoadConfig();
         SetWindowText(g_hBtnDrop, g_targetDisplay);
@@ -633,7 +619,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case ID_BTN_REFRESH:
                 CloseListPopup();
                 RefreshProcessList();
-                SetWindowText(g_hStatus, L"进程列表已刷新 (请重新点击目标程序按钮)");
                 break;
             case ID_CHK_TRAY:
                 g_closeToTray = (SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
@@ -793,7 +778,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     wc.hIconSm       = CreateFriesIcon(16);
     RegisterClassEx(&wc);
 
-    RECT r = { 0, 0, 500, 400 };
+    RECT r = { 0, 0, 500, 360 };
     AdjustWindowRect(&r, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE);
 
     g_hWnd = CreateWindowEx(0, L"MyICCWindow", L"显示器色彩调节 - myICC",
