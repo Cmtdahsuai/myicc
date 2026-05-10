@@ -244,16 +244,15 @@ void ShowListPopup() {
         listH = h > 400 ? 400 : h;
     }
 
-    g_hListDlg = CreateWindowEx(WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+    g_hListDlg = CreateWindowEx(WS_EX_TOOLWINDOW,
         L"STATIC", nullptr,
-        WS_POPUP | WS_BORDER,
+        WS_POPUP | WS_BORDER | WS_VISIBLE,
         btnRect.left, btnRect.bottom,
         440, listH,
-        g_hWnd, nullptr, g_hInst, nullptr);
+        nullptr, nullptr, g_hInst, nullptr);
     if (!g_hListDlg) return;
 
     g_oldListDlgProc = (WNDPROC)SetWindowLongPtrW(g_hListDlg, GWLP_WNDPROC, (LONG_PTR)ListDlgProc);
-
     SendMessageW(g_hListDlg, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
     g_hListBox = CreateWindowExW(0, L"LISTBOX", nullptr,
@@ -263,9 +262,6 @@ void ShowListPopup() {
     SendMessageW(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
     PopulateListBox();
-
-    ShowWindow(g_hListDlg, SW_SHOW);
-    SetFocus(g_hListBox);
 }
 
 void PopulateListBox() {
