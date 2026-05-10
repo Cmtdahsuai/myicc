@@ -107,6 +107,16 @@ struct ProcInfo {
 std::vector<ProcInfo> g_procList;
 
 void ApplyToGPU();
+void CloseListPopup();
+
+WNDPROC g_oldListDlgProc = nullptr;
+LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_COMMAND)
+        return SendMessageW(g_hWnd, WM_COMMAND, wParam, lParam);
+    if (msg == WM_ACTIVATE && LOWORD(wParam) == WA_INACTIVE)
+        CloseListPopup();
+    return CallWindowProcW(g_oldListDlgProc, hwnd, msg, wParam, lParam);
+}
 
 void CloseListPopup() {
     if (g_hListDlg) {
@@ -177,6 +187,9 @@ void ShowListPopup() {
         440, listH,
         g_hWnd, nullptr, g_hInst, nullptr);
     if (!g_hListDlg) return;
+
+    // Subclass popup to forward WM_COMMAND from listbox to main window
+    g_oldListDlgProc = (WNDPROC)SetWindowLongPtrW(g_hListDlg, GWLP_WNDPROC, (LONG_PTR)ListDlgProc);
 
     SendMessageW(g_hListDlg, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
@@ -420,16 +433,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         HDC hdc = (HDC)wParam;
         SetBkMode(hdc, TRANSPARENT);
         return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
-    }
-
-    case WM_ACTIVATE: {
-        if (LOWORD(wParam) == WA_INACTIVE) {
-            // Close popup when window loses focus (and it's not the popup)
-            if (g_hListDlg && (HWND)lParam != g_hListDlg) {
-                CloseListPopup();
-            }
-        }
-        break;
     }
 
     case WM_TIMER: {
