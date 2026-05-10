@@ -117,6 +117,7 @@ std::vector<ProcInfo> g_procList;
 
 void ApplyToGPU();
 void CloseListPopup();
+void UpdateBtnText();
 HICON CreateFriesIcon(int size);
 
 WNDPROC g_oldListDlgProc = nullptr;
@@ -301,14 +302,20 @@ void OnListSelect(int sel) {
         wcscpy(g_targetDisplay, g_procList[procIdx].name.c_str());
     }
 
-    SetWindowText(g_hBtnDrop, g_targetDisplay);
+    UpdateBtnText();
     AutoSaveConfig();
+}
+
+void UpdateBtnText() {
+    wchar_t buf[280];
+    swprintf(buf, 280, L"  %s  \x25BC", g_targetDisplay);
+    SetWindowText(g_hBtnDrop, buf);
 }
 
 void ClearTarget() {
     g_targetPath[0] = 0;
     wcscpy(g_targetDisplay, L"(全局模式 - 不限制)");
-    SetWindowText(g_hBtnDrop, g_targetDisplay);
+    UpdateBtnText();
     CloseListPopup();
     AutoSaveConfig();
     ApplyToGPU();
@@ -473,10 +480,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
             g_hSliders[i] = CreateWindow(TRACKBAR_CLASS, nullptr,
-                         WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS,
-                         190, 30 + i * 50, 195, 28,
+                         WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_AUTOTICKS | TBS_BOTTOM,
+                         190, 30 + i * 50, 195, 32,
                          hwnd, (HMENU)(UINT_PTR)sliderIds[i], hi, nullptr);
             SendMessage(g_hSliders[i], TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
+            SendMessage(g_hSliders[i], TBM_SETTICFREQ, 10, 0);
             SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, 50);
 
             g_hEdits[i] = CreateWindow(L"EDIT", L"50",
@@ -515,9 +523,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                      hwnd, nullptr, hi, nullptr);
         SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-        g_hBtnDrop = CreateWindow(L"BUTTON", g_targetDisplay,
-                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_LEFT,
-                     80, yTarget - 2, 335, 24,
+        // Show button text with dropdown arrow
+        wchar_t btnText[280];
+        swprintf(btnText, 280, L"  %s  \x25BC", g_targetDisplay);
+        g_hBtnDrop = CreateWindow(L"BUTTON", btnText,
+                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_LEFT | BS_NOTIFY,
+                     80, yTarget - 2, 345, 26,
                      hwnd, (HMENU)ID_BTN_DROPDOWN, hi, nullptr);
         SendMessage(g_hBtnDrop, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
@@ -528,7 +539,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 
         LoadConfig();
-        SetWindowText(g_hBtnDrop, g_targetDisplay);
+        UpdateBtnText();
 
         g_updating = true;
         for (int i = 0; i < 5; i++) {
@@ -556,6 +567,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         HDC hdc = (HDC)wParam;
         SetBkMode(hdc, TRANSPARENT);
         return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
+        // Note: window bg is set via wc.hbrBackground (fries cream)
     }
 
     case WM_TIMER: {
@@ -770,7 +782,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.hbrBackground = CreateSolidBrush(RGB(255, 248, 230));  // fries cream
     wc.lpszClassName = L"MyICCWindow";
     wc.hIcon   = LoadIconW(hInstance, L"IDI_MYICC");
     wc.hIconSm = LoadIconW(hInstance, L"IDI_MYICC");
