@@ -122,16 +122,12 @@ void UpdateBtnText();
 HICON CreateFriesIcon(int size);
 
 WNDPROC g_oldListDlgProc = nullptr;
-bool g_popupJustOpened = false;
 
 LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_COMMAND)
         return SendMessageW(g_hWnd, WM_COMMAND, wParam, lParam);
-    if (msg == WM_ACTIVATE && LOWORD(wParam) == WA_INACTIVE) {
-        if (!g_popupJustOpened)
-            CloseListPopup();
-        g_popupJustOpened = false;
-    }
+    if (msg == WM_KEYDOWN && wParam == VK_ESCAPE)
+        CloseListPopup();
 
     if (msg == WM_MEASUREITEM) {
         LPMEASUREITEMSTRUCT mis = (LPMEASUREITEMSTRUCT)lParam;
@@ -267,7 +263,6 @@ void ShowListPopup() {
 
     PopulateListBox();
 
-    g_popupJustOpened = true;
     ShowWindow(g_hListDlg, SW_SHOW);
     SetFocus(g_hListBox);
 }
