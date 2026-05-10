@@ -47,6 +47,7 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #define ID_TRAY_SHOW    4001
 #define ID_TRAY_EXIT    4002
 #define WM_TRAYICON     (WM_APP + 1)
+#define WM_LOADPROCS    (WM_APP + 2)
 
 HINSTANCE g_hInst;
 HWND g_hWnd = nullptr;
@@ -264,11 +265,7 @@ void ShowListPopup() {
         g_hListDlg, (HMENU)ID_LISTBOX, g_hInst, nullptr);
     SendMessageW(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-    if (!g_procListLoaded) {
-        SendMessageW(g_hListBox, LB_ADDSTRING, 0, (LPARAM)L"点击右侧「刷新」加载进程列表");
-    } else {
-        PopulateListBox();
-    }
+    PopulateListBox();
 
     g_popupJustOpened = true;
     ShowWindow(g_hListDlg, SW_SHOW);
@@ -587,9 +584,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)resIcon);
         SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)resIcon);
 
+        // Load process list in background after window is shown
+        PostMessage(hwnd, WM_LOADPROCS, 0, 0);
+
         ApplyToGPU();
         return 0;
     }
+
+    case WM_LOADPROCS:
+        RefreshProcessList();
+        g_procListLoaded = true;
+        break;
 
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT: {
