@@ -486,45 +486,45 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(g_hEdits[i], WM_SETFONT, (WPARAM)g_hFont, TRUE);
         }
 
-        // Target app section
-        int yBase = 265;
-        HWND lbl = CreateWindow(L"STATIC", L"目标程序:",
-                     WS_CHILD | WS_VISIBLE,
-                     10, yBase, 70, 20,
-                     hwnd, nullptr, hi, nullptr);
-        SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
-
-        // Dropdown button + refresh on same row
-        g_hBtnDrop = CreateWindow(L"BUTTON", g_targetDisplay,
-                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_LEFT,
-                     80, yBase - 2, 335, 24,
-                     hwnd, (HMENU)ID_BTN_DROPDOWN, hi, nullptr);
-        SendMessage(g_hBtnDrop, WM_SETFONT, (WPARAM)g_hFont, TRUE);
-
-        CreateWindow(L"BUTTON", L"刷新",
-                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     420, yBase - 3, 45, 26,
-                     hwnd, (HMENU)ID_BTN_REFRESH, hi, nullptr);
-
-        int yBtn = yBase + 34;
+        // Buttons row
+        int yBtnRow = 272;
         CreateWindow(L"BUTTON", L"恢复默认",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     68, yBtn, 80, 24,
+                     10, yBtnRow, 80, 24,
                      hwnd, (HMENU)ID_BTN_RESET, hi, nullptr);
 
         HWND chkTray = CreateWindow(L"BUTTON", L"关闭时最小化到托盘",
                      WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                     160, yBtn + 1, 155, 22,
+                     100, yBtnRow + 1, 155, 22,
                      hwnd, (HMENU)ID_CHK_TRAY, hi, nullptr);
         SendMessage(chkTray, WM_SETFONT, (WPARAM)g_hFont, TRUE);
         if (g_closeToTray) SendMessage(chkTray, BM_SETCHECK, BST_CHECKED, 0);
 
         HWND chkAuto = CreateWindow(L"BUTTON", L"开机自启动",
                      WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                     160, yBtn + 24, 100, 22,
+                     260, yBtnRow + 1, 100, 22,
                      hwnd, (HMENU)ID_CHK_AUTORUN, hi, nullptr);
         SendMessage(chkAuto, WM_SETFONT, (WPARAM)g_hFont, TRUE);
         if (IsAutoRunEnabled()) SendMessage(chkAuto, BM_SETCHECK, BST_CHECKED, 0);
+
+        // Target app section at bottom
+        int yTarget = yBtnRow + 32;
+        HWND lbl = CreateWindow(L"STATIC", L"目标程序:",
+                     WS_CHILD | WS_VISIBLE,
+                     10, yTarget, 70, 20,
+                     hwnd, nullptr, hi, nullptr);
+        SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+
+        g_hBtnDrop = CreateWindow(L"BUTTON", g_targetDisplay,
+                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_LEFT,
+                     80, yTarget - 2, 335, 24,
+                     hwnd, (HMENU)ID_BTN_DROPDOWN, hi, nullptr);
+        SendMessage(g_hBtnDrop, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+
+        CreateWindow(L"BUTTON", L"刷新",
+                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                     420, yTarget - 3, 45, 26,
+                     hwnd, (HMENU)ID_BTN_REFRESH, hi, nullptr);
 
 
         LoadConfig();
