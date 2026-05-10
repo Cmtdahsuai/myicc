@@ -122,13 +122,20 @@ void UpdateBtnText();
 HICON CreateFriesIcon(int size);
 
 WNDPROC g_oldListDlgProc = nullptr;
-bool g_populating = false;  // suppress LBN_SELCHANGE during population
+bool g_populating = false;
 
 LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_COMMAND)
         return SendMessageW(g_hWnd, WM_COMMAND, wParam, lParam);
-    if (msg == WM_KEYDOWN && wParam == VK_ESCAPE)
+    if (msg == WM_KEYDOWN && wParam == VK_ESCAPE) {
         CloseListPopup();
+        return 0;
+    }
+    // Close when clicking outside
+    if (msg == WM_KILLFOCUS) {
+        CloseListPopup();
+        return 0;
+    }
 
     if (msg == WM_MEASUREITEM) {
         LPMEASUREITEMSTRUCT mis = (LPMEASUREITEMSTRUCT)lParam;
@@ -262,6 +269,7 @@ void ShowListPopup() {
     SendMessageW(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
     PopulateListBox();
+    SetFocus(g_hListBox);  // so click-outside triggers WM_KILLFOCUS
 }
 
 void PopulateListBox() {
