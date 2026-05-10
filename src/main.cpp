@@ -178,44 +178,44 @@ void ShowListPopup() {
         g_hWnd, nullptr, g_hInst, nullptr);
     if (!g_hListDlg) return;
 
-    SendMessage(g_hListDlg, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+    SendMessageW(g_hListDlg, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-    g_hListBox = CreateWindowEx(0, L"LISTBOX", nullptr,
-        WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY,
+    g_hListBox = CreateWindowExW(0, L"LISTBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_HASSTRINGS,
         0, 0, 440, listH,
         g_hListDlg, (HMENU)ID_LISTBOX, g_hInst, nullptr);
-    SendMessage(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+    SendMessageW(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
     // Global mode option
-    int globalIdx = (int)SendMessage(g_hListBox, LB_ADDSTRING, 0, (LPARAM)L"(全局模式 - 不限制)");
-    SendMessage(g_hListBox, LB_SETITEMDATA, globalIdx, (LPARAM)-1);
+    int globalIdx = (int)SendMessageW(g_hListBox, LB_ADDSTRING, 0, (LPARAM)L"(全局模式 - 不限制)");
+    SendMessageW(g_hListBox, LB_SETITEMDATA, globalIdx, (LPARAM)-1);
 
     int selIdx = globalIdx;
     for (size_t i = 0; i < g_procList.size(); i++) {
         wchar_t display[512];
         double mem = (double)g_procList[i].memKB;
         if (mem >= 1048576.0)
-            swprintf(display, 512, L"%s  (%.1f GB)", g_procList[i].name.c_str(), mem / 1048576.0);
+            swprintf(display, 512, L"%ls  (%.1f GB)", g_procList[i].name.c_str(), mem / 1048576.0);
         else if (mem >= 1024.0)
-            swprintf(display, 512, L"%s  (%.1f MB)", g_procList[i].name.c_str(), mem / 1024.0);
+            swprintf(display, 512, L"%ls  (%.1f MB)", g_procList[i].name.c_str(), mem / 1024.0);
         else
-            swprintf(display, 512, L"%s  (%d KB)", g_procList[i].name.c_str(), (int)mem);
+            swprintf(display, 512, L"%ls  (%d KB)", g_procList[i].name.c_str(), (int)mem);
 
-        int idx = (int)SendMessage(g_hListBox, LB_ADDSTRING, 0, (LPARAM)display);
-        SendMessage(g_hListBox, LB_SETITEMDATA, idx, (LPARAM)i);
+        int idx = (int)SendMessageW(g_hListBox, LB_ADDSTRING, 0, (LPARAM)display);
+        SendMessageW(g_hListBox, LB_SETITEMDATA, idx, (LPARAM)i);
 
         if (g_targetPath[0] && _wcsicmp(g_procList[i].path.c_str(), g_targetPath) == 0)
             selIdx = idx;
     }
 
-    SendMessage(g_hListBox, LB_SETCURSEL, selIdx, 0);
+    SendMessageW(g_hListBox, LB_SETCURSEL, selIdx, 0);
     ShowWindow(g_hListDlg, SW_SHOW);
     SetFocus(g_hListBox);
 }
 
 void OnListSelect(int sel) {
     if (sel == LB_ERR) return;
-    INT_PTR data = (INT_PTR)SendMessage(g_hListBox, LB_GETITEMDATA, sel, 0);
+    INT_PTR data = (INT_PTR)SendMessageW(g_hListBox, LB_GETITEMDATA, sel, 0);
 
     if (data == -1) {
         g_targetPath[0] = 0;
@@ -334,9 +334,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_CREATE: {
         HINSTANCE hi = ((LPCREATESTRUCT)lParam)->hInstance;
 
-        NONCLIENTMETRICSW ncm = { sizeof(ncm) };
-        SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-        g_hFont = CreateFontIndirectW(&ncm.lfMessageFont);
+        g_hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 
         const wchar_t* names[] = { L"饱和度:", L"亮度:", L"对比度:", L"色温:", L"伽马:" };
         int sliderIds[] = { ID_SATURATION, ID_BRIGHTNESS, ID_CONTRAST, ID_TEMPERATURE, ID_GAMMA };
@@ -476,7 +474,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         if (notify == LBN_SELCHANGE && ctrlId == ID_LISTBOX) {
-            int sel = (int)SendMessage(g_hListBox, LB_GETCURSEL, 0, 0);
+            int sel = (int)SendMessageW(g_hListBox, LB_GETCURSEL, 0, 0);
             OnListSelect(sel);
             break;
         }
@@ -504,7 +502,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         KillTimer(hwnd, ID_TIMER);
         CloseListPopup();
         ColorController::Instance().Shutdown();
-        if (g_hFont) DeleteObject(g_hFont);
+        // g_hFont is a stock object, no need to delete
         DestroyWindow(hwnd);
         break;
 
