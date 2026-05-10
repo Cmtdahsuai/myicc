@@ -38,7 +38,8 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #define ID_BTN_RESET    2002
 #define ID_BTN_REFRESH  2006
 #define ID_BTN_CLEAR    2005
-#define ID_COMBO_TARGET 2007
+#define ID_BTN_DROPDOWN 2007
+#define ID_LISTBOX      2008
 #define ID_STATUS       3001
 #define ID_TIMER        1
 
@@ -47,7 +48,9 @@ HWND g_hWnd = nullptr;
 HWND g_hSliders[5] = {};
 HWND g_hEdits[5] = {};
 HWND g_hStatus;
-HWND g_hCombo;
+HWND g_hBtnDrop;
+HWND g_hListBox;
+HWND g_hListDlg;  // popup window hosting the listbox
 HFONT g_hFont = nullptr;
 
 ColorParams g_params;
@@ -55,6 +58,7 @@ bool g_dirty = false;
 bool g_updating = false;
 bool g_effectActive = false;
 wchar_t g_targetPath[MAX_PATH] = {};
+wchar_t g_targetDisplay[256] = L"(全局模式 - 不限制)";
 static const wchar_t* CONFIG_PATH = L"myicc_config.txt";
 
 // ---- Config ----
@@ -87,6 +91,8 @@ void LoadConfig() {
         wchar_t pathStr[MAX_PATH];
         if (swscanf(line, L"target_path %[^\r\n]", pathStr) == 1) {
             wcscpy(g_targetPath, pathStr);
+            wchar_t* lastSlash = wcsrchr(g_targetPath, L'\\');
+            wcscpy(g_targetDisplay, lastSlash ? lastSlash + 1 : g_targetPath);
         }
     }
     fclose(f);
@@ -100,13 +106,19 @@ struct ProcInfo {
 };
 std::vector<ProcInfo> g_procList;
 
-void RefreshProcessList() {
-    SendMessage(g_hCombo, CB_RESETCONTENT, 0, 0);
-    g_procList.clear();
+void ApplyToGPU();
 
-    // Add "no target" option
-    int idx0 = (int)SendMessage(g_hCombo, CB_ADDSTRING, 0, (LPARAM)L"(全局模式 - 不限制)");
-    SendMessage(g_hCombo, CB_SETITEMDATA, idx0, (LPARAM)-1);
+void CloseListPopup() {
+    if (g_hListDlg) {
+        DestroyWindow(g_hListDlg);
+        g_hListDlg = nullptr;
+        g_hListBox = nullptr;
+    }
+}
+
+void RefreshProcessList() {
+    CloseListPopup();
+    g_procList.clear();
 
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return;
@@ -130,7 +142,6 @@ void RefreshProcessList() {
                 memKB = pmc.WorkingSetSize / 1024;
             }
             CloseHandle(hProc);
-
             if (!gotPath || !path[0]) continue;
 
             ProcInfo pi;
@@ -142,36 +153,94 @@ void RefreshProcessList() {
     }
     CloseHandle(snap);
 
-    // Sort by memory, high to low
     std::sort(g_procList.begin(), g_procList.end(),
         [](const ProcInfo& a, const ProcInfo& b) { return a.memKB > b.memKB; });
+}
 
-    // Populate combo
-    int selIdx = 0;  // default: global mode
+void ShowListPopup() {
+    if (g_hListDlg) { CloseListPopup(); return; }
+
+    // Refresh list each time we open
+    RefreshProcessList();
+
+    RECT btnRect;
+    GetWindowRect(g_hBtnDrop, &btnRect);
+
+    int itemHeight = 22;
+    int listH = (int)g_procList.size() * itemHeight + itemHeight;  // +1 for global mode
+    if (listH > 400) listH = 400;
+
+    g_hListDlg = CreateWindowEx(WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        L"STATIC", nullptr,
+        WS_POPUP | WS_BORDER,
+        btnRect.left, btnRect.bottom,
+        440, listH,
+        g_hWnd, nullptr, g_hInst, nullptr);
+    if (!g_hListDlg) return;
+
+    SendMessage(g_hListDlg, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+
+    g_hListBox = CreateWindowEx(0, L"LISTBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY,
+        0, 0, 440, listH,
+        g_hListDlg, (HMENU)ID_LISTBOX, g_hInst, nullptr);
+    SendMessage(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+
+    // Global mode option
+    int globalIdx = (int)SendMessage(g_hListBox, LB_ADDSTRING, 0, (LPARAM)L"(全局模式 - 不限制)");
+    SendMessage(g_hListBox, LB_SETITEMDATA, globalIdx, (LPARAM)-1);
+
+    int selIdx = globalIdx;
     for (size_t i = 0; i < g_procList.size(); i++) {
         wchar_t display[512];
-        if (g_procList[i].memKB >= 1048576) {
-            swprintf(display, 512, L"%s  (%.1f GB)",
-                g_procList[i].name.c_str(),
-                (double)g_procList[i].memKB / 1048576.0);
-        } else if (g_procList[i].memKB >= 1024) {
-            swprintf(display, 512, L"%s  (%.1f MB)",
-                g_procList[i].name.c_str(),
-                (double)g_procList[i].memKB / 1024.0);
-        } else {
-            swprintf(display, 512, L"%s  (%d KB)",
-                g_procList[i].name.c_str(), (int)g_procList[i].memKB);
-        }
+        double mem = (double)g_procList[i].memKB;
+        if (mem >= 1048576.0)
+            swprintf(display, 512, L"%s  (%.1f GB)", g_procList[i].name.c_str(), mem / 1048576.0);
+        else if (mem >= 1024.0)
+            swprintf(display, 512, L"%s  (%.1f MB)", g_procList[i].name.c_str(), mem / 1024.0);
+        else
+            swprintf(display, 512, L"%s  (%d KB)", g_procList[i].name.c_str(), (int)mem);
 
-        int idx = (int)SendMessage(g_hCombo, CB_ADDSTRING, 0, (LPARAM)display);
-        SendMessage(g_hCombo, CB_SETITEMDATA, idx, (LPARAM)i);
+        int idx = (int)SendMessage(g_hListBox, LB_ADDSTRING, 0, (LPARAM)display);
+        SendMessage(g_hListBox, LB_SETITEMDATA, idx, (LPARAM)i);
 
         if (g_targetPath[0] && _wcsicmp(g_procList[i].path.c_str(), g_targetPath) == 0)
             selIdx = idx;
     }
 
-    SendMessage(g_hCombo, CB_SETCURSEL, selIdx, 0);
-    if (selIdx == 0) g_targetPath[0] = 0;  // global mode
+    SendMessage(g_hListBox, LB_SETCURSEL, selIdx, 0);
+    ShowWindow(g_hListDlg, SW_SHOW);
+    SetFocus(g_hListBox);
+}
+
+void OnListSelect(int sel) {
+    if (sel == LB_ERR) return;
+    INT_PTR data = (INT_PTR)SendMessage(g_hListBox, LB_GETITEMDATA, sel, 0);
+
+    if (data == -1) {
+        g_targetPath[0] = 0;
+        wcscpy(g_targetDisplay, L"(全局模式 - 不限制)");
+        ApplyToGPU();
+    } else {
+        size_t procIdx = (size_t)data;
+        if (procIdx >= g_procList.size()) return;
+        wcscpy(g_targetPath, g_procList[procIdx].path.c_str());
+        wcscpy(g_targetDisplay, g_procList[procIdx].name.c_str());
+        SetWindowText(g_hStatus, L"已设定目标程序, 等待该程序进入前台...");
+    }
+
+    SetWindowText(g_hBtnDrop, g_targetDisplay);
+    AutoSaveConfig();
+    CloseListPopup();
+}
+
+void ClearTarget() {
+    g_targetPath[0] = 0;
+    wcscpy(g_targetDisplay, L"(全局模式 - 不限制)");
+    SetWindowText(g_hBtnDrop, g_targetDisplay);
+    CloseListPopup();
+    AutoSaveConfig();
+    ApplyToGPU();
 }
 
 // ---- Foreground detection ----
@@ -179,19 +248,15 @@ bool IsTargetForeground() {
     if (!g_targetPath[0]) return false;
     HWND fg = GetForegroundWindow();
     if (!fg) return false;
-
     DWORD pid = 0;
     GetWindowThreadProcessId(fg, &pid);
     if (!pid) return false;
-
     HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!hProc) return false;
-
     wchar_t path[MAX_PATH];
     DWORD len = MAX_PATH;
     BOOL ok = QueryFullProcessImageNameW(hProc, 0, path, &len);
     CloseHandle(hProc);
-
     if (!ok) return false;
     return _wcsicmp(path, g_targetPath) == 0;
 }
@@ -202,7 +267,6 @@ void ApplyToGPU() {
     ColorController::Instance().ApplySettings(g_params);
     g_effectActive = true;
     g_dirty = false;
-
     wchar_t status[128];
     swprintf(status, 128, L"已应用: 饱和度=%d  亮度=%d  对比度=%d  色温=%d  伽马=%d",
              g_params.saturation, g_params.brightness, g_params.contrast,
@@ -226,7 +290,7 @@ void ResetToDefault() {
     }
     g_updating = false;
     AutoSaveConfig();
-    if (g_effectActive || !g_targetPath[0]) ApplyToGPU();
+    ApplyToGPU();
 }
 
 int ClampValue(int v) { return v < 0 ? 0 : (v > 100 ? 100 : v); }
@@ -237,7 +301,6 @@ void OnEditChanged(int idx) {
     GetWindowText(g_hEdits[idx], buf, 16);
     int val = _wtoi(buf);
     val = ClampValue(val);
-
     g_updating = true;
     SendMessage(g_hSliders[idx], TBM_SETPOS, TRUE, val);
     if (val != _wtoi(buf)) {
@@ -245,7 +308,6 @@ void OnEditChanged(int idx) {
         SetWindowText(g_hEdits[idx], buf);
     }
     g_updating = false;
-
     switch (idx) {
         case 0: g_params.saturation  = val; break;
         case 1: g_params.brightness  = val; break;
@@ -266,39 +328,12 @@ void SyncEditToSlider(int idx, int value) {
     g_updating = false;
 }
 
-void ClearTarget();
-
-void OnComboSelect() {
-    int sel = (int)SendMessage(g_hCombo, CB_GETCURSEL, 0, 0);
-    if (sel == CB_ERR) return;
-
-    INT_PTR data = (INT_PTR)SendMessage(g_hCombo, CB_GETITEMDATA, sel, 0);
-    if (data == -1) {
-        // Global mode
-        ClearTarget();  // clears path and applies
-    } else {
-        size_t procIdx = (size_t)data;
-        if (procIdx >= g_procList.size()) return;
-        wcscpy(g_targetPath, g_procList[procIdx].path.c_str());
-        AutoSaveConfig();
-        SetWindowText(g_hStatus, L"已设定目标程序, 等待该程序进入前台...");
-    }
-}
-
-void ClearTarget() {
-    g_targetPath[0] = 0;
-    SendMessage(g_hCombo, CB_SETCURSEL, 0, 0);
-    AutoSaveConfig();
-    ApplyToGPU();
-}
-
 // ---- Window Procedure ----
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE: {
         HINSTANCE hi = ((LPCREATESTRUCT)lParam)->hInstance;
 
-        // Create a proper CJK-capable font for all controls
         NONCLIENTMETRICSW ncm = { sizeof(ncm) };
         SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
         g_hFont = CreateFontIndirectW(&ncm.lfMessageFont);
@@ -328,43 +363,42 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(g_hEdits[i], WM_SETFONT, (WPARAM)g_hFont, TRUE);
         }
 
-        // Target app dropdown
-        HWND targetLbl = CreateWindow(L"STATIC", L"目标程序:",
+        // Target app section
+        HWND lbl = CreateWindow(L"STATIC", L"目标程序:",
                      WS_CHILD | WS_VISIBLE,
                      10, 265, 70, 20,
                      hwnd, nullptr, hi, nullptr);
-        SendMessage(targetLbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+        SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-        g_hCombo = CreateWindow(L"COMBOBOX", nullptr,
-                     WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
-                     80, 263, 380, 300,
-                     hwnd, (HMENU)ID_COMBO_TARGET, hi, nullptr);
-        SendMessage(g_hCombo, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+        // Use a button instead of ComboBox
+        g_hBtnDrop = CreateWindow(L"BUTTON", g_targetDisplay,
+                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_LEFT,
+                     80, 262, 380, 24,
+                     hwnd, (HMENU)ID_BTN_DROPDOWN, hi, nullptr);
+        SendMessage(g_hBtnDrop, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
         CreateWindow(L"BUTTON", L"刷新",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                      10, 298, 55, 24,
                      hwnd, (HMENU)ID_BTN_REFRESH, hi, nullptr);
-
         CreateWindow(L"BUTTON", L"清除",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                      72, 298, 55, 24,
                      hwnd, (HMENU)ID_BTN_CLEAR, hi, nullptr);
-
         CreateWindow(L"BUTTON", L"恢复默认",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                      140, 298, 80, 24,
                      hwnd, (HMENU)ID_BTN_RESET, hi, nullptr);
 
-        // Status bar
-        g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整色彩, 下拉栏选择目标程序",
+        g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整色彩, 点击目标程序选择",
                      WS_CHILD | WS_VISIBLE | SS_LEFT | WS_BORDER,
                      10, 335, 460, 22,
                      hwnd, (HMENU)ID_STATUS, hi, nullptr);
         SendMessage(g_hStatus, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-        // Load config and init
         LoadConfig();
+        SetWindowText(g_hBtnDrop, g_targetDisplay);
+
         g_updating = true;
         for (int i = 0; i < 5; i++) {
             int vals[] = { g_params.saturation, g_params.brightness,
@@ -376,24 +410,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         g_updating = false;
 
-        RefreshProcessList();
         SetTimer(hwnd, ID_TIMER, 500, nullptr);
-
-        // Always apply on start (no target = global mode)
         ApplyToGPU();
-
         return 0;
     }
 
     case WM_CTLCOLORSTATIC: {
-        // Ensure transparent background for static labels
         HDC hdc = (HDC)wParam;
         SetBkMode(hdc, TRANSPARENT);
         return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
     }
 
+    case WM_ACTIVATE: {
+        if (LOWORD(wParam) == WA_INACTIVE) {
+            // Close popup when window loses focus (and it's not the popup)
+            if (g_hListDlg && (HWND)lParam != g_hListDlg) {
+                CloseListPopup();
+            }
+        }
+        break;
+    }
+
     case WM_TIMER: {
-        static bool wasForeground = true;  // start as true so first tick triggers apply
+        static bool wasForeground = true;
         bool hasNoTarget = !g_targetPath[0];
         bool isForeground = hasNoTarget || IsTargetForeground();
 
@@ -409,7 +448,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_HSCROLL: {
         int id = GetDlgCtrlID((HWND)lParam);
         int pos = (int)SendMessage((HWND)lParam, TBM_GETPOS, 0, 0);
-
         switch (id) {
             case ID_SATURATION:  g_params.saturation  = pos; SyncEditToSlider(0, pos); break;
             case ID_BRIGHTNESS:  g_params.brightness  = pos; SyncEditToSlider(1, pos); break;
@@ -437,18 +475,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
 
-        if (notify == CBN_SELCHANGE && ctrlId == ID_COMBO_TARGET) {
-            OnComboSelect();
+        if (notify == LBN_SELCHANGE && ctrlId == ID_LISTBOX) {
+            int sel = (int)SendMessage(g_hListBox, LB_GETCURSEL, 0, 0);
+            OnListSelect(sel);
             break;
         }
 
         switch (ctrlId) {
+            case ID_BTN_DROPDOWN:
+                ShowListPopup();
+                break;
             case ID_BTN_RESET:
                 ResetToDefault();
                 break;
             case ID_BTN_REFRESH:
+                CloseListPopup();
                 RefreshProcessList();
-                SetWindowText(g_hStatus, L"进程列表已刷新");
+                SetWindowText(g_hStatus, L"进程列表已刷新 (请重新点击目标程序按钮)");
                 break;
             case ID_BTN_CLEAR:
                 ClearTarget();
@@ -459,6 +502,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     case WM_CLOSE:
         KillTimer(hwnd, ID_TIMER);
+        CloseListPopup();
         ColorController::Instance().Shutdown();
         if (g_hFont) DeleteObject(g_hFont);
         DestroyWindow(hwnd);
