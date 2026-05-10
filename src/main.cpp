@@ -231,21 +231,20 @@ void RefreshProcessList() {
 
 bool g_procListLoaded = false;
 
+void PopulateListBox();
+
 void ShowListPopup() {
     if (g_hListDlg) { CloseListPopup(); return; }
 
-    // Only refresh on first open; use "刷新" button for updates
-    if (!g_procListLoaded) {
-        RefreshProcessList();
-        g_procListLoaded = true;
-    }
-
+    // No auto-refresh — user clicks "刷新" to load
     RECT btnRect;
     GetWindowRect(g_hBtnDrop, &btnRect);
 
-    int itemHeight = 22;
-    int listH = (int)g_procList.size() * itemHeight + itemHeight;  // +1 for global mode
-    if (listH > 400) listH = 400;
+    int listH = 100;  // small initial size
+    if (g_procListLoaded && !g_procList.empty()) {
+        int h = (int)g_procList.size() * 22 + 22;
+        listH = h > 400 ? 400 : h;
+    }
 
     g_hListDlg = CreateWindowEx(WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         L"STATIC", nullptr,
@@ -255,7 +254,6 @@ void ShowListPopup() {
         g_hWnd, nullptr, g_hInst, nullptr);
     if (!g_hListDlg) return;
 
-    // Subclass popup to forward WM_COMMAND from listbox to main window
     g_oldListDlgProc = (WNDPROC)SetWindowLongPtrW(g_hListDlg, GWLP_WNDPROC, (LONG_PTR)ListDlgProc);
 
     SendMessageW(g_hListDlg, WM_SETFONT, (WPARAM)g_hFont, TRUE);
@@ -266,7 +264,20 @@ void ShowListPopup() {
         g_hListDlg, (HMENU)ID_LISTBOX, g_hInst, nullptr);
     SendMessageW(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-    // Global mode option
+    if (!g_procListLoaded) {
+        SendMessageW(g_hListBox, LB_ADDSTRING, 0, (LPARAM)L"点击右侧「刷新」加载进程列表");
+    } else {
+        PopulateListBox();
+    }
+
+    g_popupJustOpened = true;
+    ShowWindow(g_hListDlg, SW_SHOW);
+    SetFocus(g_hListBox);
+}
+
+void PopulateListBox() {
+    SendMessageW(g_hListBox, LB_RESETCONTENT, 0, 0);
+
     int globalIdx = (int)SendMessageW(g_hListBox, LB_ADDSTRING, 0, (LPARAM)L"(全局模式 - 不限制)");
     SendMessageW(g_hListBox, LB_SETITEMDATA, globalIdx, (LPARAM)-1);
 
@@ -290,9 +301,6 @@ void ShowListPopup() {
     }
 
     SendMessageW(g_hListBox, LB_SETCURSEL, selIdx, 0);
-    g_popupJustOpened = true;
-    ShowWindow(g_hListDlg, SW_SHOW);
-    SetFocus(g_hListBox);
 }
 
 void OnListSelect(int sel) {
@@ -650,9 +658,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 ResetToDefault();
                 break;
             case ID_BTN_REFRESH:
-                CloseListPopup();
                 RefreshProcessList();
                 g_procListLoaded = true;
+                if (g_hListBox) {
+                    PopulateListBox();
+                    // Resize popup
+                    int h = ((int)g_procList.size() + 1) * 22;
+                    if (h > 400) h = 400;
+                    SetWindowPos(g_hListDlg, nullptr, 0, 0, 440, h, SWP_NOMOVE | SWP_NOZORDER);
+                }
                 break;
             case ID_CHK_TRAY:
                 g_closeToTray = (SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
