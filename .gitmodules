@@ -1,0 +1,3 @@
+[submodule "thirdparty/nvapi"]
+	path = thirdparty/nvapi
+	url = https://github.com/NVIDIA/nvapi.git
