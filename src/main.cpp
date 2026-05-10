@@ -122,6 +122,7 @@ void UpdateBtnText();
 HICON CreateFriesIcon(int size);
 
 WNDPROC g_oldListDlgProc = nullptr;
+bool g_populating = false;  // suppress LBN_SELCHANGE during population
 
 LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_COMMAND)
@@ -268,6 +269,7 @@ void ShowListPopup() {
 }
 
 void PopulateListBox() {
+    g_populating = true;
     SendMessageW(g_hListBox, LB_RESETCONTENT, 0, 0);
 
     int globalIdx = (int)SendMessageW(g_hListBox, LB_ADDSTRING, 0, (LPARAM)L"(全局模式 - 不限制)");
@@ -293,6 +295,7 @@ void PopulateListBox() {
     }
 
     SendMessageW(g_hListBox, LB_SETCURSEL, selIdx, 0);
+    g_populating = false;
 }
 
 void OnListSelect(int sel) {
@@ -645,8 +648,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         if (notify == LBN_SELCHANGE && ctrlId == ID_LISTBOX) {
-            int sel = (int)SendMessageW(g_hListBox, LB_GETCURSEL, 0, 0);
-            OnListSelect(sel);
+            if (!g_populating) {
+                int sel = (int)SendMessageW(g_hListBox, LB_GETCURSEL, 0, 0);
+                OnListSelect(sel);
+            }
             break;
         }
 
