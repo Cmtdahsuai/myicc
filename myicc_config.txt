@@ -1,6 +1,5 @@
-saturation 100
-brightness 0
-contrast 0
-temperature 0
-gamma 0
-target_path E:\WeGameApps\rail_apps\DeltaForce(2001918)\DeltaForce\Binaries\Win64\DeltaForceClient-Win64-Shipping.exe
+saturation 50
+brightness 50
+contrast 50
+temperature 50
+gamma 50

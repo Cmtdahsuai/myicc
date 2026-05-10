@@ -384,24 +384,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                      hwnd, nullptr, hi, nullptr);
         SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
-        // Use a button instead of ComboBox
+        // Dropdown button + refresh on same row
         g_hBtnDrop = CreateWindow(L"BUTTON", g_targetDisplay,
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_LEFT,
-                     80, 262, 380, 24,
+                     80, 261, 335, 24,
                      hwnd, (HMENU)ID_BTN_DROPDOWN, hi, nullptr);
         SendMessage(g_hBtnDrop, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
         CreateWindow(L"BUTTON", L"刷新",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     10, 298, 55, 24,
+                     420, 260, 45, 26,
                      hwnd, (HMENU)ID_BTN_REFRESH, hi, nullptr);
+
         CreateWindow(L"BUTTON", L"清除",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     72, 298, 55, 24,
+                     10, 296, 52, 24,
                      hwnd, (HMENU)ID_BTN_CLEAR, hi, nullptr);
         CreateWindow(L"BUTTON", L"恢复默认",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     140, 298, 80, 24,
+                     68, 296, 80, 24,
                      hwnd, (HMENU)ID_BTN_RESET, hi, nullptr);
 
         g_hStatus = CreateWindow(L"STATIC", L"就绪 - 拖动滑块调整色彩, 点击目标程序选择",
