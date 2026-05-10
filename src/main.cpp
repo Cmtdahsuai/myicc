@@ -490,7 +490,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         int yBtnRow = 272;
         CreateWindow(L"BUTTON", L"恢复默认",
                      WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                     10, yBtnRow, 80, 24,
+                     400, yBtnRow, 80, 24,
                      hwnd, (HMENU)ID_BTN_RESET, hi, nullptr);
 
         HWND chkTray = CreateWindow(L"BUTTON", L"关闭时最小化到托盘",
