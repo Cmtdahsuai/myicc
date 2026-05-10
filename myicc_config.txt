@@ -1,7 +1,6 @@
 saturation 50
-grayscale 0
 brightness 50
 contrast 50
 temperature 50
-gamma 51
+gamma 50
 close_to_tray 1

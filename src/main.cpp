@@ -437,27 +437,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         g_hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 
-        const wchar_t* names[] = { L"饱和度:", L"亮度:", L"对比度:", L"色温:", L"伽马:" };
+        const wchar_t* names[] = {
+            L"饱和度 (色彩鲜艳程度):",
+            L"亮度 (画面明暗):",
+            L"对比度 (明暗差异):",
+            L"色温 (冷暖色调):",
+            L"伽马 (中间调亮度):"
+        };
         int sliderIds[] = { ID_SATURATION, ID_BRIGHTNESS, ID_CONTRAST, ID_TEMPERATURE, ID_GAMMA };
         int editIds[]   = { ID_EDIT_SAT, ID_EDIT_BRI, ID_EDIT_CON, ID_EDIT_TMP, ID_EDIT_GAM };
 
         for (int i = 0; i < 5; i++) {
             HWND lbl = CreateWindow(L"STATIC", names[i],
-                         WS_CHILD | WS_VISIBLE,
-                         10, 12 + i * 50, 60, 20,
+                         WS_CHILD | WS_VISIBLE | SS_LEFTNOWORDWRAP,
+                         10, 12 + i * 50, 175, 20,
                          hwnd, nullptr, hi, nullptr);
             SendMessage(lbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
             g_hSliders[i] = CreateWindow(TRACKBAR_CLASS, nullptr,
                          WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS,
-                         75, 30 + i * 50, 310, 28,
+                         190, 30 + i * 50, 195, 28,
                          hwnd, (HMENU)(UINT_PTR)sliderIds[i], hi, nullptr);
             SendMessage(g_hSliders[i], TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
             SendMessage(g_hSliders[i], TBM_SETPOS, TRUE, 50);
 
             g_hEdits[i] = CreateWindow(L"EDIT", L"50",
                          WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER | ES_CENTER,
-                         395, 30 + i * 50, 45, 22,
+                         390, 30 + i * 50, 45, 22,
                          hwnd, (HMENU)(UINT_PTR)editIds[i], hi, nullptr);
             SendMessage(g_hEdits[i], WM_SETFONT, (WPARAM)g_hFont, TRUE);
         }
