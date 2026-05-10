@@ -110,6 +110,7 @@ std::vector<ProcInfo> g_procList;
 
 void ApplyToGPU();
 void CloseListPopup();
+HICON CreateFriesIcon(int size);
 
 WNDPROC g_oldListDlgProc = nullptr;
 LRESULT CALLBACK ListDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -474,6 +475,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         g_updating = false;
 
         SetTimer(hwnd, ID_TIMER, 500, nullptr);
+
+        // Explicitly set window icons
+        HICON bigIcon = CreateFriesIcon(32);
+        HICON smallIcon = CreateFriesIcon(16);
+        SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)bigIcon);
+        SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)smallIcon);
+
         ApplyToGPU();
         return 0;
     }
@@ -623,8 +631,10 @@ HICON CreateFriesIcon(int size) {
         DeleteObject(fBr);
     }
 
-    // Mask: all white (fully opaque icon)
-    FillRect(hdcMask, &rc, whiteBr);
+    // Mask: black = opaque, white = transparent
+    HBRUSH blackBr = CreateSolidBrush(RGB(0, 0, 0));
+    FillRect(hdcMask, &rc, blackBr);
+    DeleteObject(blackBr);
     DeleteObject(whiteBr);
 
     SelectObject(hdcColor, oldColor);
