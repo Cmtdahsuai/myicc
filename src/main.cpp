@@ -246,10 +246,10 @@ void ShowListPopup() {
         listH = h > 400 ? 400 : h;
     }
 
-    g_hListDlg = CreateWindowEx(WS_EX_TOOLWINDOW,
+    g_hListDlg = CreateWindowEx(WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         L"STATIC", nullptr,
-        WS_POPUP | WS_BORDER | WS_VISIBLE,
-        btnRect.left, btnRect.bottom,
+        WS_POPUP | WS_BORDER,
+        btnRect.left, btnRect.bottom + 2,
         440, listH,
         nullptr, nullptr, g_hInst, nullptr);
     if (!g_hListDlg) return;
@@ -264,7 +264,9 @@ void ShowListPopup() {
     SendMessageW(g_hListBox, WM_SETFONT, (WPARAM)g_hFont, TRUE);
 
     PopulateListBox();
-    SetFocus(g_hListBox);  // so click-outside triggers WM_KILLFOCUS
+
+    ShowWindow(g_hListDlg, SW_SHOWNA);  // show without activating
+    SetFocus(g_hListBox);
 }
 
 void PopulateListBox() {
