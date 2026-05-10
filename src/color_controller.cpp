@@ -57,16 +57,17 @@ bool ColorController::ApplySettings(const ColorParams& params) {
 
 bool ColorController::SetGammaRamp(const ColorParams& params) {
 
-    // Saturation now handled by color matrix, not LUT
+    // Saturation + grayscale handled by color matrix
     if (m_enhance.IsReady()) {
-        float sat = params.saturation / 50.0f;  // 0..2 (1=neutral at slider 50)
-        m_enhance.SetSaturation(sat);
+        float sat = params.saturation / 50.0f;      // 0..2 (1=neutral at slider 50)
+        float gray = params.grayscale / 100.0f;      // 0..1 (0=color, 1=B&W)
+        m_enhance.SetSaturation(sat, gray);
     }
 
     GDI_GAMMA_RAMP ramp;
     if (params.gamma == 50 && params.brightness == 50 &&
         params.contrast == 50 && params.temperature == 50 &&
-        params.saturation == 50) {
+        params.saturation == 50 && params.grayscale == 0) {
         GammaEngine::GenerateNeutral(ramp);
         if (m_enhance.IsReady()) m_enhance.Reset();
     } else {

@@ -81,14 +81,17 @@ void ColorEnhancer::Reset() {
     m_currentSat = 1.0f;
 }
 
-void ColorEnhancer::SetSaturation(float sat) {
+void ColorEnhancer::SetSaturation(float sat, float gray) {
     if (!m_ready) return;
-    m_currentSat = sat;
+
+    // Effective saturation = saturation * (1 - grayscale)
+    float effectiveSat = sat * (1.0f - gray);
+    m_currentSat = effectiveSat;
 
     const float rLum = 0.299f;
     const float gLum = 0.587f;
     const float bLum = 0.114f;
-    float t = 1.0f - sat;
+    float t = 1.0f - effectiveSat;
 
     // out = gray + sat * (in - gray)  where gray = luminance
     // Each row = one input channel; columns = output channels.
